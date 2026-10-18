@@ -10,13 +10,19 @@
     ".": "./src/index.ts",
     "./styles.css": "./src/styles.css"
   },
-  "files": ["src", "LICENSE", "README.md"],
-  "sideEffects": ["*.css"],
+  "files": [
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild test/geometry.test.ts --bundle --platform=node --format=cjs --outfile=test-results/geometry.cjs --log-level=warning && node test-results/geometry.cjs"
+    "test": "esbuild test/geometry.test.ts --bundle --platform=node --format=cjs --outfile=test-results/geometry.cjs --log-level=warning && node test-results/geometry.cjs && esbuild test/basic.test.ts --bundle --platform=node --format=cjs --outfile=test-results/basic.cjs --log-level=warning && node test-results/basic.cjs"
   },
   "peerDependencies": {
     "lightweight-charts": "^5.0.0",

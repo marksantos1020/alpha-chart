@@ -1,8 +1,8 @@
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AlphaChart, type Datafeed } from "../src";
+import { AlphaChart, basicEngine, type Datafeed } from "../src";
 import { binanceDatafeed } from "./binance";
-import { demoDatafeed, demoEngine } from "./demo";
+import { demoDatafeed } from "./demo";
 import "../src/styles.css";
 import "./example.css";
 
@@ -22,7 +22,7 @@ function App() {
     <main className="example">
       <AlphaChart
         datafeed={src.feed}
-        engine={demoEngine}
+        engine={basicEngine}
         symbol={symbol}
         interval={interval}
         onInterval={setInterval}

@@ -18,3 +18,4 @@ export { fmtNum, fmtPrice, priceDecimals } from "./format";
 export { LoadingDots } from "./indicators/IndicatorRow";
 export { ColorField } from "./indicators/SettingsDialog";
 export { uid } from "./uid";
+export { basicEngine, computeStudy, BASIC_CATEGORIES, BASIC_STUDIES, type Study } from "./basic/index";

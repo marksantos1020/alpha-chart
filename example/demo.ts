@@ -1,4 +1,4 @@
-import type { Bar, Datafeed, EngineOut, IndicatorEngine, IndicatorFrame, InputDef, StudyEntry } from "../src";
+import type { Bar, Datafeed } from "../src";
 
 const IV_MS: Record<string, number> = { "1": 60e3, "5": 300e3, "15": 900e3, "60": 3600e3, "240": 14400e3, D: 86400e3, W: 604800e3 };
 const HISTORY = 5000;
@@ -52,73 +52,4 @@ export const demoDatafeed: Datafeed = {
     return () => clearInterval(timer);
   },
   historyStart: (symbol) => history(symbol, "D")[0]?.time,
-};
-
-type Calc = (closes: number[], p: Record<string, number>) => number[];
-
-const sma: Calc = (c, { length }) => c.map((_, i) => (i + 1 < length ? NaN : c.slice(i + 1 - length, i + 1).reduce((a, b) => a + b, 0) / length));
-const ema: Calc = (c, { length }) => {
-  const k = 2 / (length + 1), out: number[] = [];
-  c.forEach((v, i) => out.push(i === 0 ? v : v * k + out[i - 1] * (1 - k)));
-  return out.map((v, i) => (i + 1 < length ? NaN : v));
-};
-const rsi: Calc = (c, { length }) => {
-  let up = 0, down = 0;
-  return c.map((v, i) => {
-    if (i === 0) return NaN;
-    const d = v - c[i - 1], a = 1 / length;
-    up = i === 1 ? Math.max(d, 0) : up * (1 - a) + Math.max(d, 0) * a;
-    down = i === 1 ? Math.max(-d, 0) : down * (1 - a) + Math.max(-d, 0) * a;
-    return i < length ? NaN : down === 0 ? 100 : 100 - 100 / (1 + up / down);
-  });
-};
-
-interface Study extends StudyEntry { calc: Calc; inputs: InputDef[]; color: string; levels?: number[] }
-const length = (n: number): InputDef[] => [{ name: "length", type: "int", default: n, min: 1, max: 500 }];
-const STUDIES: Study[] = [
-  { id: "sma", name: "Simple moving average", shortTitle: "SMA", overlay: true, category: "Moving averages", description: "Mean of the last N closes", calc: sma, inputs: length(20), color: "#f2b544" },
-  { id: "ema", name: "Exponential moving average", shortTitle: "EMA", overlay: true, category: "Moving averages", description: "Exponentially weighted mean", calc: ema, inputs: length(9), color: "#2962ff" },
-  { id: "rsi", name: "Relative strength index", shortTitle: "RSI", overlay: false, category: "Oscillators", description: "Wilder's RSI with 70/30 levels", calc: rsi, inputs: length(14), color: "#7e57c2", levels: [70, 30] },
-];
-
-function frameOf(s: Study, bars: Bar[], params: Record<string, unknown>): IndicatorFrame {
-  const p: Record<string, number> = {};
-  for (const d of s.inputs) p[d.name] = Number(params[d.name] ?? d.default);
-  return {
-    plots: [{ title: s.shortTitle, pane: s.overlay ? 0 : 1, style: "line", color: s.color, width: 2, lineStyle: "solid", display: "all",
-              times: Float64Array.from(bars, (b) => b.time), values: Float64Array.from(s.calc(bars.map((b) => b.close), p)) }],
-    bands: [], shapes: [], bgcolors: [],
-    hlines: (s.levels ?? []).map((value) => ({ value, color: "#5c6878", style: "dashed" })),
-  };
-}
-
-export const demoEngine: IndicatorEngine = {
-  categories: ["Moving averages", "Oscillators", "Volume"],
-  entries: () => STUDIES,
-  entry: (id) => STUDIES.find((s) => s.id === id),
-  connect(onMessage) {
-    const insts = new Map<string, { study: Study; params: Record<string, unknown> }>();
-    let key = "", bars: Bar[] = [];
-    const send = (m: EngineOut) => setTimeout(() => onMessage(m), 0);
-    const run = (id: string) => {
-      const it = insts.get(id);
-      if (it && bars.length) send({ type: "frame", id, key, full: true, frame: frameOf(it.study, bars, it.params) });
-    };
-    return {
-      post(m) {
-        if (m.type === "data") { key = m.key; bars = m.bars.slice(); insts.forEach((_, id) => run(id)); }
-        else if (m.type === "bar" && m.key === key) {
-          if (bars.length && bars[bars.length - 1].time === m.bar.time) bars[bars.length - 1] = m.bar; else bars.push(m.bar);
-          insts.forEach((_, id) => run(id));
-        } else if (m.type === "set") {
-          const study = STUDIES.find((s) => s.id === m.study);
-          if (!study) { send({ type: "error", id: m.id, message: `unknown study ${m.study}` }); return; }
-          insts.set(m.id, { study, params: m.params });
-          send({ type: "meta", id: m.id, inputs: study.inputs, config: { shortTitle: study.shortTitle, overlay: study.overlay } });
-          run(m.id);
-        } else if (m.type === "remove") insts.delete(m.id);
-      },
-      close() { insts.clear(); },
-    };
-  },
 };

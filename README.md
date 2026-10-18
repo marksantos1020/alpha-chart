@@ -16,7 +16,7 @@ The chart fetches nothing by itself. The host application supplies three things:
 |---|---|---|
 | `Datafeed` | bars: a first page, older pages while scrolling left, live updates | — |
 | `ChartStorage` | the layout, drawings and indicator templates | `localChartStorage()` (default) |
-| `IndicatorEngine` | the studies in the picker and their computation (usually a Web Worker) | — (the example has a small one) |
+| `IndicatorEngine` | the studies in the picker and their computation | `basicEngine`: 26 standard indicators |
 
 It comes from AlphaForge, a trading terminal for Bittensor subnet alpha markets, where the
 same chart runs with a market API datafeed, server-side storage and a scripting-language engine.
@@ -72,7 +72,29 @@ interface Bar { time: number /* open time, epoch ms */; open: number; high: numb
 Intervals are TradingView resolution names: `"1" "5" "15" "30" "60" "120" "240" "D" "W"`. Bars may
 carry extra fields; the chart passes them to the indicator engine unchanged.
 
-### Indicator engine
+### Built-in indicators
+
+`basicEngine` gives the picker 26 common indicators, computed with TradingView's formulas and default
+inputs, colours and levels:
+
+| Category | Indicators |
+|---|---|
+| Moving averages | SMA, EMA, WMA, Hull MA, VWMA |
+| Bands & channels | Bollinger Bands, Keltner Channels, Donchian Channels, Envelope |
+| Trend | VWAP (daily, UTC), Supertrend, Parabolic SAR, ADX |
+| Oscillators | RSI, MACD, Stochastic, Stochastic RSI, CCI, Williams %R, Momentum, ROC, ATR |
+| Volume | Volume with MA, OBV, Money Flow Index, Chaikin Money Flow |
+
+```tsx
+import { AlphaChart, basicEngine } from "alpha-chart";
+
+<AlphaChart datafeed={datafeed} engine={basicEngine} symbol="TAOUSDT" interval="60" />
+```
+
+They run on the main thread; a live tick recomputes and sends only the last values to the chart.
+`computeStudy(id, bars, params)` returns one indicator's output without a chart (tests, servers).
+
+### Your own indicator engine
 
 ```ts
 interface IndicatorEngine {
@@ -87,7 +109,7 @@ interface IndicatorEngine {
 The chart posts `data` (all bars of `"<symbol>:<interval>"`), `bar` (the newest bar changed),
 `set` (an instance's study and inputs) and `remove`. The engine answers `meta` (input definitions,
 title, format), `frame` (plots, bands, horizontal levels, shapes, background colours; `full: false`
-for a tail update) or `error`. `example/demo.ts` is a complete engine in about 60 lines.
+for a tail update) or `error`. `src/basic/engine.ts` is a complete engine to start from.
 
 ### Props
 
@@ -111,7 +133,7 @@ for a tail update) or `error`. `example/demo.ts` is a complete engine in about 6
 
 ```bash
 npm run typecheck
-npm test           # drawing geometry
+npm test           # drawing geometry, built-in indicators
 npm run build      # type-check + bundle the example
 ```
 
