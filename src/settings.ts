@@ -13,7 +13,6 @@ export interface ChartSettings {
   autoScale: boolean;
   timezone: string;
   grid: boolean;
-  /** `blocks` switches the host's bar details (AlphaChart `barInfo`); the name is kept for saved layouts. */
   status: { ohlc: boolean; change: boolean; volume: boolean; blocks: boolean; indicatorArgs: boolean; indicatorValues: boolean };
   countdown: "off" | "time" | "blocks";
 }

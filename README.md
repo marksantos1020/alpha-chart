@@ -25,8 +25,13 @@ same chart runs with a market API datafeed, server-side storage and a scripting-
 
 ```bash
 npm ci
-npm run dev        # http://localhost:5173: random-walk data, SMA/EMA/RSI, localStorage
+npm run dev        # http://localhost:5173
 ```
+
+The example charts live market data from Binance's public API (TAO/USDT, BTC/USDT, ETH/USDT; no key
+needed): history pages in as you scroll back and the last bar updates over a WebSocket. A random walk is
+available offline from the source switch. `example/binance.ts` is a complete `Datafeed` for a real
+exchange in about 60 lines; market data © Binance.
 
 ## Use it
 

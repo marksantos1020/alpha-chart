@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChartStorage } from "../types";
 import type { Drawing, DrawingsDoc, ToolId } from "./types";
 
-// local copy per symbol: the chart opens with it at once, the storage answer follows
 const LOCAL = (symbol: string) => `alpha.chart.drawings.v2.${symbol}`;
 const PREFS = "alpha.chart.drawprefs.v1";
 const MAX_UNDO = 100;

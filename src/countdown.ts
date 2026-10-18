@@ -4,11 +4,9 @@ export interface CountdownSource {
   mode(): "off" | "time" | "blocks";
   bar(): { end: number; close: number; up: boolean } | null;
   colors(): { up: string; down: string };
-  /** Block clock for the "blocks" mode (chains whose bars close on a block). */
   block?(): BlockClock | undefined;
 }
 
-/** A chain's block time, for counting down to the bar close in blocks. */
 export interface BlockClock { ms: number; name?: string }
 
 export function countdownText(msLeft: number, mode: "time" | "blocks", block?: BlockClock): string {

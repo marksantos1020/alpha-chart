@@ -48,53 +48,34 @@ import { INTERVAL_MS, useDatafeed } from "./useDatafeed";
 import { localChartStorage } from "./localStorage";
 
 export interface AlphaChartProps {
-  /** Market data. Keep the object stable (create it once): a new datafeed reloads the chart. */
   datafeed: Datafeed;
   symbol: string;
-  /** TradingView resolution name: "1" "5" "15" "30" "60" "120" "240" "D" "W". */
   interval: string;
-  /** Called when the chart wants another interval (typed interval, range buttons, saved layout). */
   onInterval?: (interval: string) => void;
-  /** Intervals the host offers; others are refused. */
   intervals?: string[];
-  /** Display name next to the symbol in the legend. */
   name?: string;
-  /** Computes indicators; without it the Indicators button and templates are hidden. Keep it stable. */
   engine?: IndicatorEngine;
-  /** Layout, drawings and templates; defaults to localStorage. Keep it stable. */
   storage?: ChartStorage;
-  /** Host output drawn over the chart (e.g. a strategy's plots and markers). */
   overlay?: OverlayFrame | null;
-  /** Extra rows at the end of the price pane's legend (e.g. the host's strategy row). */
   legendRows?: ReactNode;
-  /** Receives picker entries of kind "strategy". */
   onAddStrategy?: (entry: StudyEntry) => void;
-  /** Opens the indicator picker (on a new seq), optionally on a category. */
   pickerRequest?: { seq: number; category?: string } | null;
-  /** Content at the start (e.g. interval tabs) and end (e.g. export) of the top toolbar. */
   toolbar?: ReactNode;
   actions?: ReactNode;
-  /** Unit after volume numbers, e.g. "α". */
   volumeUnit?: string;
-  /** Host details of a bar in the status line (switchable in the settings as `barInfoLabel`). */
   barInfo?: (bar: Bar) => ReactNode;
   barInfoLabel?: string;
-  /** Block time of the chain: offers the countdown to the bar close in blocks. */
   block?: BlockClock;
-  /** Exposes `window.__alphaChart` (test hooks). Defaults to Vite's DEV flag. */
   debug?: boolean;
 }
 
 export interface AlphaChartHandle {
-  /** Centres the view on a time (loading older bars first when needed). */
   goTo(ms: number): void;
-  /** Shows a range preset; may switch the interval through `onInterval`. */
   showRange(range: RangeKey): void;
 }
 
 const DEFAULT_STORAGE = localChartStorage();
 const isDev = () => !!(import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV;
-/** A bar is closed when it says so; without the flag every bar but the last one is. */
 const isClosed = (b: Bar, last: boolean) => b.closed ?? !last;
 
 const VOL_KEY = "alpha.chart.volume.v1";
@@ -296,7 +277,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   const symbolPrecision = useMemo(() => {
     const last = candles[candles.length - 1];
     return last ? priceDecimals(last.close) : 6;
-  }, [candles.length > 0 ? candles[candles.length - 1].close : "", symbol]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [candles.length > 0 ? candles[candles.length - 1].close : "", symbol]);
 
   const dirRef = useRef(new Map<number, boolean>());
   useEffect(() => {
@@ -334,7 +315,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
                    paneFor: (p) => (p === 0 ? 0 : base + p) });
     }
     return { items, paneOf };
-  }, [ind.frameFor]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ind.frameFor]);
 
   const measurePanes = useCallback(() => {
     const c = chart.current;
@@ -647,7 +628,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const { paneOf } = useMemo(() => buildItems(), [buildItems, ind.instances, ind.states, ind.rev, frame, symbolPrecision]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const { paneOf } = useMemo(() => buildItems(), [buildItems, ind.instances, ind.states, ind.rev, frame, symbolPrecision]);
   const candleAt = useMemo(() => {
     if (hoverTime === null) return candles[candles.length - 1];
     let lo = 0, hi = candles.length - 1;

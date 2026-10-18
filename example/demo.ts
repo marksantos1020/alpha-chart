@@ -1,8 +1,6 @@
-// Demo implementations of the three host interfaces: a random-walk Datafeed and a small
-// IndicatorEngine computed on the main thread. Storage uses the built-in localChartStorage().
 import type { Bar, Datafeed, EngineOut, IndicatorEngine, IndicatorFrame, InputDef, StudyEntry } from "../src";
 
-const IV_MS: Record<string, number> = { "1": 60e3, "5": 300e3, "15": 900e3, "60": 3600e3, "240": 14400e3, D: 86400e3 };
+const IV_MS: Record<string, number> = { "1": 60e3, "5": 300e3, "15": 900e3, "60": 3600e3, "240": 14400e3, D: 86400e3, W: 604800e3 };
 const HISTORY = 5000;
 
 function rng(seed: number) {
@@ -31,7 +29,6 @@ function history(symbol: string, interval: string): Bar[] {
   return bars;
 }
 
-/** Random walk per symbol and interval; the last bar moves every second, a new one opens on time. */
 export const demoDatafeed: Datafeed = {
   async getBars(symbol, interval, { limit, end }) {
     const bars = history(symbol, interval);
@@ -56,8 +53,6 @@ export const demoDatafeed: Datafeed = {
   },
   historyStart: (symbol) => history(symbol, "D")[0]?.time,
 };
-
-// ---------------------------------------------------------------- indicators
 
 type Calc = (closes: number[], p: Record<string, number>) => number[];
 
@@ -97,7 +92,6 @@ function frameOf(s: Study, bars: Bar[], params: Record<string, unknown>): Indica
   };
 }
 
-/** Three studies computed on the main thread. A real engine would usually run in a Web Worker. */
 export const demoEngine: IndicatorEngine = {
   categories: ["Moving averages", "Oscillators", "Volume"],
   entries: () => STUDIES,

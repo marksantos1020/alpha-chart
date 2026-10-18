@@ -12,8 +12,6 @@ export const INTERVAL_MS: Record<string, number> = {
   "1": 60e3, "3": 180e3, "5": 300e3, "15": 900e3, "30": 1800e3, "60": 3600e3, "120": 7200e3, "240": 14400e3, D: 86400e3, W: 604800e3,
 };
 
-/** Interval and start for each range button; the interval falls back to the current one when the
- *  host does not offer it. */
 function rangePlan(r: RangeKey, now: number, historyStart: number): [string, number] {
   const day = 86_400_000;
   const plan: Record<RangeKey, [string, number]> = {
@@ -24,8 +22,6 @@ function rangePlan(r: RangeKey, now: number, historyStart: number): [string, num
   return plan[r];
 }
 
-/** Merges live bars into the loaded list: replaces the bar with the same time, appends newer ones,
- *  and never replaces a final bar with a non-final one. */
 export function mergeBars(prev: Bar[], incoming: Bar[]): Bar[] {
   if (incoming.length === 0) return prev;
   let out = prev;
@@ -45,9 +41,7 @@ export function mergeBars(prev: Bar[], incoming: Bar[]): Bar[] {
 const NO_BARS: Bar[] = [];
 
 export interface DatafeedState {
-  /** Bars of the current symbol:interval (empty while another one is loading). */
   bars: Bar[];
-  /** Bumps on every fresh load: the chart redraws from scratch on a new generation. */
   dataSeq: number;
   loading: boolean;
   fetching: boolean;
@@ -57,8 +51,6 @@ export interface DatafeedState {
   viewRequest: ViewRequest | null;
 }
 
-/** Loads bars for the chart from a Datafeed: the latest page, older pages while scrolling left,
- *  live updates, and the history a range or go-to needs before the view moves. */
 export function useDatafeed(feed: Datafeed, symbol: string, interval: string,
                             onInterval?: (iv: string) => void, intervals?: string[]): DatafeedState {
   const [bars, setBars] = useState<Bar[]>([]);

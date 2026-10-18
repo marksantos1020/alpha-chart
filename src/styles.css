@@ -1,7 +1,3 @@
-/* alpha-chart styles. The colour tokens below are defaults: redefine them on :root (or any
-   ancestor) to theme the chart. Classes such as .btn, .modal, .form-row and .search form a small
-   UI kit the chart's dialogs use; a host app may use them too. Import this file before the
-   app's own stylesheet. */
 
 :root {
   --bg: #151b23;

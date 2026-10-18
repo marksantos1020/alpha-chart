@@ -18,7 +18,6 @@ export interface ControllerHost {
   openSettings: (id: string) => void;
   openMenu: (id: string, clientX: number, clientY: number) => void;
   editText: (id: string) => void;
-  /** Unit appended to the measure tool's volume line, e.g. "α". */
   volumeUnit?: () => string;
 }
 

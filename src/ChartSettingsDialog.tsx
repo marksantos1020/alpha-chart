@@ -7,9 +7,7 @@ interface Props {
   settings: ChartSettings;
   onChange: (s: ChartSettings) => void;
   onClose: () => void;
-  /** Offers the countdown in blocks (and names the tab "Block"). */
   block?: BlockClock;
-  /** Label of the status-line switch for the host's bar details (shown only when set). */
   barInfoLabel?: string;
 }
 

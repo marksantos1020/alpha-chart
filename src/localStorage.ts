@@ -19,8 +19,6 @@ function write<T>(key: string, doc: T, updated: number): SaveResult<T> {
 
 interface StoredTemplate { id: string; name: string; indicators: TemplateIndicators }
 
-/** A ChartStorage in the browser's localStorage: layouts, drawings and indicator templates stay on
- *  this device. `prefix` namespaces the keys (several charts or apps on one origin). */
 export function localChartStorage(prefix = "alpha-chart"): ChartStorage {
   const tKey = `${prefix}.templates`;
   const templates = (): StoredTemplate[] => {
