@@ -1,0 +1,6 @@
+/* Page basics for the example; alpha-chart's own styles come from src/styles.css. */
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+button, input, select { font: inherit; color: inherit; }
+.example { height: 100%; display: flex; flex-direction: column; padding-top: 10px; min-width: 0; }
