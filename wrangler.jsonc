@@ -1,0 +1,10 @@
+// Cloudflare deployment of the example app (static files only, no Worker code):
+// build with `npm run build`, then `npx wrangler deploy` uploads dist-example/.
+{
+  "name": "alpha-chart",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist-example",
+    "not_found_handling": "single-page-application"
+  }
+}
