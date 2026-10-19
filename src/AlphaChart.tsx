@@ -435,15 +435,6 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     if (it) renderer.current?.tail(it, times);
   };
 
-  const lastLogical = useCallback((): number | null => {
-    const c = chart.current, s = series.current;
-    if (!c || !s) return null;
-    const d = s.dataByIndex(Number.MAX_SAFE_INTEGER, MismatchDirection.NearestLeft) as { time: Time } | null;
-    if (!d) return null;
-    const x = c.timeScale().timeToCoordinate(d.time);
-    const l = x === null ? null : c.timeScale().coordinateToLogical(x);
-    return l === null ? null : Math.round(l);
-  }, []);
   const applyMarks = useCallback(() => {
     for (const m of marks.current) { try { m.host.detachPrimitive(m.prim); } catch {} }
     marks.current = [];
@@ -452,12 +443,12 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     const hosts = sel === "__main" ? [series.current] : sel === "__volume" ? [vol.current] : renderer.current?.seriesOf(sel) ?? [];
     for (const host of hosts) {
       if (!host) continue;
-      const prim = new SelectionMarks({ anchor: lastLogical, background: () => colorsRef.current?.bg ?? "#151b23" });
+      const prim = new SelectionMarks({ period: () => intervalMsRef.current / 1000, background: () => colorsRef.current?.bg ?? "#151b23" });
       host.attachPrimitive(prim);
       marks.current.push({ prim, host: host as ISeriesApi<SeriesType> });
     }
     priceLabels.current?.update();
-  }, [lastLogical]);
+  }, []);
   const select = useCallback((id: string | null) => {
     if (id && drawRef.current.selRef.current) drawRef.current.select(null);
     if (selRef.current === id) return;

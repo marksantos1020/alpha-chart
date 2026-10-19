@@ -4,7 +4,7 @@ import {
   snapAngle, snapTime, timeToLogical, type Pt, type Timeline,
 } from "../src/drawings/geometry";
 import { defaultStyle, type Drawing } from "../src/drawings/types";
-import { selectionIndices, selectionStep } from "../src/selection";
+import { isSelectionBar, selectionStep } from "../src/selection";
 
 let n = 0;
 const ok = (name: string, fn: () => void) => { fn(); n++; console.log(`ok  ${name}`); };
@@ -104,13 +104,15 @@ ok("measure label: preferred side, flips at the pane edge, stays inside when nei
   assert.ok(r.y >= 4 && r.y + r.h <= 396);
 });
 
-ok("selection circles: about 130 px apart, anchored on the last bar, only inside the view", () => {
-  assert.equal(selectionStep(12.5), 10);
-  assert.equal(selectionStep(200), 1);
-  assert.equal(selectionStep(0), 1);
-  assert.deepEqual(selectionIndices(100, 60, 120, 10), [100, 90, 80, 70, 60]);
-  assert.deepEqual(selectionIndices(100, 40, 75, 10), [70, 60, 50, 40]);
-  assert.deepEqual(selectionIndices(100, 101, 120, 10), []);
+ok("selection circles: every 12th bar by bar time, thinned by doubling only when closer than 14 px", () => {
+  assert.equal(selectionStep(12.5), 12);
+  assert.equal(selectionStep(1.25), 12);
+  assert.equal(selectionStep(0.6), 24);
+  assert.equal(selectionStep(0.2), 96);
+  const hour = 3600, marked = (step: number) => Array.from({ length: 200 }, (_, i) => 1_700_000_000 - 1_700_000_000 % hour + i * hour).filter((t) => isSelectionBar(t, hour, step));
+  assert.ok(marked(12).length === 16 || marked(12).length === 17);
+  for (let i = 1; i < marked(12).length; i++) assert.equal(marked(12)[i] - marked(12)[i - 1], 12 * hour);
+  assert.ok(marked(24).every((t) => marked(12).includes(t)));
 });
 
 console.log(`GEOMETRY OK (${n})`);
