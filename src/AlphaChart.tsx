@@ -52,6 +52,7 @@ import { INTERVAL_MS, useDatafeed } from "./useDatafeed";
 import { localChartStorage } from "./localStorage";
 import { HlcArea } from "./hlcArea";
 import ChartTypeMenu from "./ChartTypeMenu";
+import { Chevron, IndicatorsIcon, RedoIcon, UndoIcon } from "./icons";
 import { canvasColors, useDocumentTheme, useResolvedTheme, type CanvasColors, type ThemeMode } from "./theme";
 
 export interface AlphaChartProps {
@@ -431,8 +432,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
-        fontSize: 11,
+        fontFamily: getComputedStyle(el.current).getPropertyValue("--font").trim() || "-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif",
+        fontSize: 12,
         panes: { enableResize: true },
       },
       timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 4 },
@@ -825,11 +826,11 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
         {toolbar}
         <span className="tool-sep" />
         <ChartTypeMenu value={settings.barStyle} onChange={(barStyle) => patchSettings({ barStyle })} />
-        {engine && <button className="btn tool" onClick={() => setPicker(true)} title="Indicators (/)">ƒx Indicators</button>}
+        {engine && <button className="btn tool" onClick={() => setPicker(true)} title="Indicators (/)"><IndicatorsIcon />Indicators</button>}
         {engine && storage.templates && <TemplatesMenu store={storage.templates} instances={ind.instances} onApply={(list: IndicatorInstance[]) => ind.replaceAll(list)} />}
         <span className="tool-sep" />
-        <button className="btn tool icon" onClick={() => { draw.undo(); drawCtl.current?.refresh(); }} disabled={!draw.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
-        <button className="btn tool icon" onClick={() => { draw.redo(); drawCtl.current?.refresh(); }} disabled={!draw.canRedo} title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
+        <button className="btn tool icon" onClick={() => { draw.undo(); drawCtl.current?.refresh(); }} disabled={!draw.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo"><UndoIcon /></button>
+        <button className="btn tool icon" onClick={() => { draw.redo(); drawCtl.current?.refresh(); }} disabled={!draw.canRedo} title="Redo (Ctrl+Y)" aria-label="Redo"><RedoIcon /></button>
         <div className="spacer" />
         {actions}
       </div>
@@ -839,18 +840,19 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
                  const ts = chart.current?.timeScale(), r = ts?.getVisibleLogicalRange();
                  if (ts && r) { const mid = (r.from + r.to) / 2, half = (r.to - r.from); ts.setVisibleLogicalRange({ from: mid - half, to: mid + half }); }
                }} />
+      <div className="chart-main">
       <div className="chart-wrap" ref={wrap} onPointerUp={() => requestAnimationFrame(measurePanes)}>
         <div ref={el} style={{ position: "absolute", inset: 0 }} />
         {(show || blank || fetching) && (
           <div className="legend-stack" style={{ top: 4 }}>
             <div className="legend">
-              <span className="sym">{symbol}{name ? ` · ${name}` : ""} · {IV_LABEL[interval] ?? interval}</span>
+              <span className="sym">{symbol} · {IV_LABEL[interval] ?? interval}{name ? ` · ${name}` : ""}</span>
               {settings.status.ohlc && (
                 <>
-                  <span>O <b style={{ color: barColor }}>{show ? fmtBarPrice(show.open) : none}</b></span>
-                  <span>H <b style={{ color: barColor }}>{show ? fmtBarPrice(show.high) : none}</b></span>
-                  <span>L <b style={{ color: barColor }}>{show ? fmtBarPrice(show.low) : none}</b></span>
-                  <span>C <b style={{ color: barColor }}>{show ? fmtBarPrice(show.close) : none}</b></span>
+                  <span>O<b style={{ color: barColor }}>{show ? fmtBarPrice(show.open) : none}</b></span>
+                  <span>H<b style={{ color: barColor }}>{show ? fmtBarPrice(show.high) : none}</b></span>
+                  <span>L<b style={{ color: barColor }}>{show ? fmtBarPrice(show.low) : none}</b></span>
+                  <span>C<b style={{ color: barColor }}>{show ? fmtBarPrice(show.close) : none}</b></span>
                 </>
               )}
               {settings.status.change && (show
@@ -879,7 +881,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
               </>
             )}
             {(mainRows.length > 0 || !!legendRows) && (
-              <button className="legend-collapse" onClick={() => setCollapsed(!collapsed)} title={collapsed ? "Show indicator legend" : "Hide indicator legend"}>{collapsed ? "▾" : "▴"}</button>
+              <button className="legend-collapse" onClick={() => setCollapsed(!collapsed)} title={collapsed ? "Show indicator legend" : "Hide indicator legend"} aria-label={collapsed ? "Show indicator legend" : "Hide indicator legend"}><Chevron up={!collapsed} /></button>
             )}
           </div>
         )}
@@ -897,9 +899,10 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
         {loading && candles.length === 0 && <div className="overlay">Loading candles…</div>}
         {!loading && candles.length === 0 && <div className="overlay">No bars yet for {symbol}</div>}
       </div>
-      </div>
       <BottomBar settings={settings} onSettings={patchSettings} onRange={feed.showRange} onGoTo={() => setGotoOpen(true)}
                  onOpenSettings={() => setSettingsOpen(true)} onReset={resetView} />
+      </div>
+      </div>
       {settingsOpen && <ChartSettingsDialog settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} block={block}
                                             barInfoLabel={barInfo ? barInfoLabel ?? "Bar details" : undefined}
                                             theme={onThemeChange ? theme ?? "system" : undefined} onThemeChange={onThemeChange} />}

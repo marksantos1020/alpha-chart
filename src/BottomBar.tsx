@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { TIMEZONES, clock, type ChartSettings } from "./settings";
+import { GoToIcon, ResetIcon, SettingsIcon } from "./icons";
 
 export type RangeKey = "1D" | "5D" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "All";
 export const RANGES: RangeKey[] = ["1D", "5D", "1M", "3M", "6M", "YTD", "1Y", "All"];
@@ -31,7 +32,8 @@ export default function BottomBar({ settings, onSettings, onRange, onGoTo, onOpe
       <div className="tabs ranges">
         {RANGES.map((r) => <button key={r} onClick={() => onRange(r)} title={`Show ${r === "All" ? "all history" : r}`}>{r}</button>)}
       </div>
-      <button className="bb-btn" onClick={onGoTo} title="Go to date (Alt+G)" aria-label="Go to date">⇥ Go to</button>
+      <span className="tool-sep" />
+      <button className="bb-btn icon" onClick={onGoTo} title="Go to date (Alt+G)" aria-label="Go to date"><GoToIcon /></button>
       <div className="spacer" />
       <div className="bb-tz" ref={ref}>
         <button className="bb-btn" onClick={() => setTzOpen(!tzOpen)} title="Time zone">{clock(now, settings.timezone)}</button>
@@ -49,8 +51,9 @@ export default function BottomBar({ settings, onSettings, onRange, onGoTo, onOpe
       <button className={`bb-btn ${mode === "percent" ? "on" : ""}`} title="Percent scale" onClick={() => onSettings({ scaleMode: mode === "percent" ? "normal" : "percent" })}>%</button>
       <button className={`bb-btn ${mode === "log" ? "on" : ""}`} title="Logarithmic scale (Alt+L)" onClick={() => onSettings({ scaleMode: mode === "log" ? "normal" : "log" })}>log</button>
       <button className={`bb-btn ${settings.autoScale ? "on" : ""}`} title="Auto scale" onClick={() => onSettings({ autoScale: !settings.autoScale })}>auto</button>
-      <button className="bb-btn" title="Reset chart view (Alt+R)" onClick={onReset}>⟲</button>
-      <button className="bb-btn" title="Chart settings" aria-label="Chart settings" onClick={onOpenSettings}>⚙</button>
+      <span className="tool-sep" />
+      <button className="bb-btn icon" title="Reset chart view (Alt+R)" aria-label="Reset chart view" onClick={onReset}><ResetIcon /></button>
+      <button className="bb-btn icon" title="Chart settings" aria-label="Chart settings" onClick={onOpenSettings}><SettingsIcon /></button>
     </div>
   );
 }

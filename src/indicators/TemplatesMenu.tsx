@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { TemplateInfo, TemplateStore } from "../types";
 import type { IndicatorInstance } from "./types";
+import { TemplatesIcon } from "../icons";
 
 interface Props {
   store: TemplateStore;
@@ -52,7 +53,7 @@ export default function TemplatesMenu({ store, instances, onApply }: Props) {
 
   return (
     <div className="tmpl" ref={ref}>
-      <button className={`btn tool ${open ? "on" : ""}`} onClick={() => setOpen(!open)} title="Indicator templates">Templates ▾</button>
+      <button className={`btn tool icon ${open ? "on" : ""}`} onClick={() => setOpen(!open)} title="Indicator templates" aria-label="Indicator templates"><TemplatesIcon /></button>
       {open && (
         <div className="tmpl-menu" role="menu">
           {saving ? (

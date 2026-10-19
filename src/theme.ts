@@ -77,7 +77,7 @@ export function canvasColors(el: Element): CanvasColors {
   return {
     text: v("--chart-text", "#8b98a8"),
     grid: v("--chart-grid", "#1f2834"),
-    border: v("--border", "#2b3644"),
+    border: v("--divider", v("--border", "#2b3644")),
     separatorHover: v("--chart-separator-hover", "rgba(242,181,68,0.25)"),
     crosshair: v("--chart-crosshair", "#9598a1"),
     crosshairLabel: v("--chart-crosshair-label", "#131722"),

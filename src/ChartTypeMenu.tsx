@@ -34,7 +34,7 @@ export default function ChartTypeMenu({ value, onChange }: { value: BarStyle; on
   const label = BAR_STYLES.find(([k]) => k === value)?.[1] ?? value;
   return (
     <div className="chart-type" ref={ref}>
-      <button className={`btn tool icon chart-type-btn ${open ? "on" : ""}`} onClick={() => setOpen(!open)} title={label}
+      <button className={`btn tool icon ${open ? "on" : ""}`} onClick={() => setOpen(!open)} title={label}
               aria-label="Chart type" aria-haspopup="menu" aria-expanded={open}>
         {CHART_TYPE_ICONS[value]}
       </button>

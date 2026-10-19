@@ -30,7 +30,7 @@ const I: Record<string, ReactNode> = {
   trash: <><path d="M3 5h12M7 5V3h4v2M5 5l1 11h6l1-11" /></>,
 };
 const Icon = ({ name }: { name: string }) => (
-  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">{I[name]}</svg>
+  <svg width="28" height="28" viewBox="-5 -5 28 28" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">{I[name]}</svg>
 );
 
 const Chevron = ({ up = false }: { up?: boolean }) => (
