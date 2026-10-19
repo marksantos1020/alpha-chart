@@ -1,6 +1,6 @@
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AlphaChart, basicEngine, type Datafeed } from "../src";
+import { AlphaChart, ThemeToggle, basicEngine, useThemeMode, type Datafeed } from "../src";
 import { binanceDatafeed } from "./binance";
 import { demoDatafeed } from "./demo";
 import "../src/styles.css";
@@ -17,6 +17,7 @@ function App() {
   const [source, setSource] = useState("binance");
   const [symbol, setSymbol] = useState(SYMBOLS[0]);
   const [interval, setInterval] = useState("60");
+  const { mode, theme, setMode } = useThemeMode();
   const src = SOURCES[source];
   return (
     <main className="example">
@@ -28,6 +29,8 @@ function App() {
         onInterval={setInterval}
         intervals={INTERVALS.map(([k]) => k)}
         name={src.label}
+        theme={mode}
+        onThemeChange={setMode}
         toolbar={
           <>
             <select className="bar-style" value={symbol} onChange={(e) => setSymbol(e.target.value)} aria-label="Symbol">
@@ -44,6 +47,7 @@ function App() {
             <select className="bar-style" value={source} onChange={(e) => setSource(e.target.value)} aria-label="Data source">
               {Object.entries(SOURCES).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
             </select>
+            <ThemeToggle theme={theme} onChange={setMode} />
           </>
         }
       />

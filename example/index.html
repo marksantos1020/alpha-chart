@@ -6,6 +6,9 @@
     <title>alpha-chart example</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <script>
+      try { var m = localStorage.getItem("alpha.theme"); if (m !== "dark" && m !== "light") m = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; document.documentElement.setAttribute("data-theme", m); document.documentElement.style.colorScheme = m; } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

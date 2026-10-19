@@ -46,6 +46,7 @@ import { Countdown, type BlockClock } from "./countdown";
 import { useLayout, type LayoutDoc } from "./useLayout";
 import { INTERVAL_MS, useDatafeed } from "./useDatafeed";
 import { localChartStorage } from "./localStorage";
+import { canvasColors, useDocumentTheme, useResolvedTheme, type CanvasColors, type ThemeMode } from "./theme";
 
 export interface AlphaChartProps {
   datafeed: Datafeed;
@@ -66,6 +67,8 @@ export interface AlphaChartProps {
   barInfo?: (bar: Bar) => ReactNode;
   barInfoLabel?: string;
   block?: BlockClock;
+  theme?: ThemeMode;
+  onThemeChange?: (mode: ThemeMode) => void;
   debug?: boolean;
 }
 
@@ -102,6 +105,17 @@ function alpha(hex: string, a: number): string {
   if (!m) return hex;
   const n = parseInt(m[1], 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+function themeOptions(t: CanvasColors) {
+  const line = { color: t.crosshair, labelBackgroundColor: t.crosshairLabel };
+  return {
+    layout: { textColor: t.text, panes: { separatorColor: t.border, separatorHoverColor: t.separatorHover } },
+    grid: { vertLines: { color: t.grid }, horzLines: { color: t.grid } },
+    rightPriceScale: { borderColor: t.border },
+    leftPriceScale: { borderColor: t.border },
+    timeScale: { borderColor: t.border },
+    crosshair: { vertLine: line, horzLine: line },
+  };
 }
 function mainOptions(s: ChartSettings, base: number) {
   const up = s.upColor, down = s.downColor;
@@ -168,7 +182,9 @@ function overlayFrame(f: OverlayFrame | null | undefined): OverlayFrame | null {
 
 const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaChart(
   { datafeed, symbol, interval, onInterval, intervals, name, engine, storage = DEFAULT_STORAGE, overlay, legendRows, onAddStrategy, pickerRequest,
-    toolbar, actions, volumeUnit, barInfo, barInfoLabel, block, debug }, ref) {
+    toolbar, actions, volumeUnit, barInfo, barInfoLabel, block, theme, onThemeChange, debug }, ref) {
+  const resolvedTheme = useResolvedTheme(theme);
+  const documentTheme = useDocumentTheme();
   const feed = useDatafeed(datafeed, symbol, interval, onInterval, intervals);
   const { bars: candles, dataSeq, loading, fetching } = feed;
   const onNeedOlder = feed.loadOlder, viewRequest = feed.viewRequest;
@@ -349,16 +365,14 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#8b98a8",
         fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
         fontSize: 11,
-        panes: { separatorColor: "#2b3644", separatorHoverColor: "rgba(242,181,68,0.25)", enableResize: true },
+        panes: { enableResize: true },
       },
-      grid: { vertLines: { color: "#1f2834" }, horzLines: { color: "#1f2834" } },
-      rightPriceScale: { borderColor: "#2b3644" },
-      timeScale: { borderColor: "#2b3644", timeVisible: true, secondsVisible: false, rightOffset: 4 },
+      timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 4 },
       crosshair: { mode: CrosshairMode.Normal },
     });
+    c.applyOptions(themeOptions(canvasColors(el.current)));
     mainStyle.current = settingsRef.current.barStyle;
     const s = createMain(c, mainStyle.current);
     s.applyOptions(mainOptions(settingsRef.current, 0) as any);
@@ -420,6 +434,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
         measureLabel: () => drawCtl.current?.layer.lastMeasureLabel ?? null,
         measureAxes: () => drawCtl.current?.layer.axisState() ?? null,
         barTimes: () => barsRef.current.times,
+        colors: () => { const o = c.options(); return { grid: o.grid.vertLines.color, text: o.layout.textColor, border: o.rightPriceScale.borderColor }; },
         indicatorSeries: () => c.panes().flatMap((p, pane) => p.getSeries().filter((x) => x !== series.current && x !== v)
           .map((x) => ({ pane, times: x.data().filter((d: any) => d.value !== undefined).map((d: any) => d.time as number) }))),
       };
@@ -515,6 +530,12 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     c.applyOptions({ grid: { vertLines: { visible: settings.grid }, horzLines: { visible: settings.grid } } });
     drawCtl.current?.refresh();
   }, [settings.barStyle, settings.upColor, settings.downColor, settings.wicks, settings.borders, settings.lastPriceLine, settings.grid, mainData, toVolC]);
+
+  useEffect(() => {
+    if (!el.current || !chart.current) return;
+    chart.current.applyOptions(themeOptions(canvasColors(el.current)));
+    drawCtl.current?.refresh();
+  }, [resolvedTheme, documentTheme]);
 
   useEffect(() => {
     const mode = { normal: PriceScaleMode.Normal, log: PriceScaleMode.Logarithmic, percent: PriceScaleMode.Percentage, indexed: PriceScaleMode.IndexedTo100 }[settings.scaleMode];
@@ -680,7 +701,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   const mainRows = rows.filter((r) => r.pane === 0 || r.pane === -1);
 
   return (
-    <>
+    <div className="alpha-chart" data-theme={resolvedTheme} style={{ display: "contents" }}>
       <div className="chart-tools">
         {toolbar}
         <span className="tool-sep" />
@@ -763,7 +784,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       <BottomBar settings={settings} onSettings={patchSettings} onRange={feed.showRange} onGoTo={() => setGotoOpen(true)}
                  onOpenSettings={() => setSettingsOpen(true)} onReset={resetView} />
       {settingsOpen && <ChartSettingsDialog settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} block={block}
-                                            barInfoLabel={barInfo ? barInfoLabel ?? "Bar details" : undefined} />}
+                                            barInfoLabel={barInfo ? barInfoLabel ?? "Bar details" : undefined}
+                                            theme={onThemeChange ? theme ?? "system" : undefined} onThemeChange={onThemeChange} />}
       {gotoOpen && <GoToDate onGo={feed.goTo} onClose={() => setGotoOpen(false)} />}
       {picker && <IndicatorPicker engine={engine} onAdd={(id) => (id === "__volume" ? setVolState("1") : ind.add(id))} onClose={() => { setPicker(false); setPickerCat(undefined); }}
                                   onAddStrategy={onAddStrategy} initialCategory={pickerCat}
@@ -797,7 +819,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
                         title={engine?.entry(editingInst.libraryId)?.name ?? "Indicator"}
                         onChange={(patch) => ind.update(editingInst.id, patch)} onClose={() => setEditing(null)} />
       )}
-    </>
+    </div>
   );
 });
 

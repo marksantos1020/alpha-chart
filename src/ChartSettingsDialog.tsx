@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ColorField } from "./indicators/SettingsDialog";
 import { BAR_STYLES, DEFAULT_SETTINGS, TIMEZONES, type BarStyle, type ChartSettings, type ScaleMode } from "./settings";
 import type { BlockClock } from "./countdown";
+import { THEME_MODES, type ThemeMode } from "./theme";
 
 interface Props {
   settings: ChartSettings;
@@ -9,20 +10,25 @@ interface Props {
   onClose: () => void;
   block?: BlockClock;
   barInfoLabel?: string;
+  theme?: ThemeMode;
+  onThemeChange?: (mode: ThemeMode) => void;
 }
 
 type Tab = "symbol" | "status" | "scales" | "canvas" | "block";
 
-export default function ChartSettingsDialog({ settings: s, onChange, onClose, block, barInfoLabel }: Props) {
+export default function ChartSettingsDialog({ settings: s, onChange, onClose, block, barInfoLabel, theme, onThemeChange }: Props) {
   const [tab, setTab] = useState<Tab>("symbol");
   const [original] = useState(s);
+  const [originalTheme] = useState(theme);
+  const cancel = () => { onChange(original); if (originalTheme && originalTheme !== theme) onThemeChange?.(originalTheme); onClose(); };
+  const cancelRef = useRef(cancel); cancelRef.current = cancel;
   const set = (patch: Partial<ChartSettings>) => onChange({ ...s, ...patch });
   const setStatus = (k: keyof ChartSettings["status"], v: boolean) => onChange({ ...s, status: { ...s.status, [k]: v } });
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { onChange(original); onClose(); } };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") cancelRef.current(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onChange, onClose, original]);
+  }, []);
 
   const check = (label: string, value: boolean, fn: (v: boolean) => void) => (
     <div className="form-row"><label className="check wide"><input type="checkbox" checked={value} onChange={(e) => fn(e.target.checked)} /><span>{label}</span></label></div>
@@ -32,7 +38,7 @@ export default function ChartSettingsDialog({ settings: s, onChange, onClose, bl
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal settings" role="dialog" aria-label="Chart settings">
         <div className="modal-head"><span>Chart settings</span><div className="spacer" />
-          <button className="icon-btn" onClick={() => { onChange(original); onClose(); }} title="Close (Esc)">✕</button></div>
+          <button className="icon-btn" onClick={cancel} title="Close (Esc)">✕</button></div>
         <div className="modal-tabs">
           {([["symbol", "Symbol"], ["status", "Status line"], ["scales", "Scales"], ["canvas", "Canvas"], ["block", block ? "Block" : "Countdown"]] as [Tab, string][]).map(([k, l]) => (
             <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>
@@ -74,6 +80,11 @@ export default function ChartSettingsDialog({ settings: s, onChange, onClose, bl
           )}
           {tab === "canvas" && (
             <>
+              {theme && onThemeChange && (
+                <div className="form-row"><label><span>Theme</span>
+                  <select value={theme} onChange={(e) => onThemeChange(e.target.value as ThemeMode)}>{THEME_MODES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                </label></div>
+              )}
               {check("Grid lines", s.grid, (v) => set({ grid: v }))}
               <div className="form-row"><label><span>Time zone</span>
                 <select value={s.timezone} onChange={(e) => set({ timezone: e.target.value })}>{TIMEZONES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
@@ -96,7 +107,7 @@ export default function ChartSettingsDialog({ settings: s, onChange, onClose, bl
         <div className="modal-foot">
           <button className="btn" onClick={() => onChange({ ...DEFAULT_SETTINGS })}>Defaults</button>
           <div className="spacer" />
-          <button className="btn" onClick={() => { onChange(original); onClose(); }}>Cancel</button>
+          <button className="btn" onClick={cancel}>Cancel</button>
           <button className="btn primary" onClick={onClose}>Ok</button>
         </div>
       </div>

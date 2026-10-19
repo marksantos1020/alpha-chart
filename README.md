@@ -9,6 +9,7 @@ A TradingView-style trading chart for React, built on
 - an indicator picker with categories and favorites, indicator templates
 - range presets, go to date, typed intervals, log/percent scales, time zones, countdown to bar close
 - an autosaved layout and per-symbol drawings
+- dark and light themes, or follow the system setting
 
 The chart fetches nothing by itself. The host application supplies three things:
 
@@ -122,12 +123,50 @@ for a tail update) or `error`. `src/basic/engine.ts` is a complete engine to sta
 | `legendRows`, `toolbar`, `actions` | your own content in the legend and the toolbar |
 | `onAddStrategy`, `pickerRequest` | picker entries of kind `"strategy"`; open the picker from outside |
 | `volumeUnit`, `barInfo`, `barInfoLabel`, `block` | volume unit, extra bar details in the status line, countdown in blocks (chains) |
+| `theme`, `onThemeChange` | `"dark"`, `"light"` or `"system"`; with `onThemeChange` Chart settings › Canvas offers the choice |
 | `ref` | `goTo(ms)`, `showRange("1M")` |
 
-### Theming
+### Themes
 
-`styles.css` defines colour tokens (`--bg`, `--panel`, `--raised`, `--border`, `--text`, `--muted`,
-`--dim`, `--buy`, `--sell`, `--accent`, `--font`) on `:root`; redefine them after importing it.
+```tsx
+import { AlphaChart, ThemeToggle, useThemeMode } from "alpha-chart";
+
+function App() {
+  const { mode, theme, setMode } = useThemeMode();
+  return (
+    <AlphaChart theme={mode} onThemeChange={setMode} actions={<ThemeToggle theme={theme} onChange={setMode} />} {...rest} />
+  );
+}
+```
+
+`useThemeMode()` keeps the choice in `localStorage` (`alpha.theme`), follows the operating system
+in `"system"` mode and sets `data-theme` on `<html>`, so the rest of the page can use the same
+colours. Without it, `theme` alone themes the chart and its dialogs. To avoid a dark flash on
+load, set the attribute before the page renders:
+
+```html
+<script>
+  try { var m = localStorage.getItem("alpha.theme"); if (m !== "dark" && m !== "light") m = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; document.documentElement.setAttribute("data-theme", m); } catch (e) {}
+</script>
+```
+
+Colours are CSS custom properties in `styles.css`: one set under `:root, [data-theme="dark"]`, one
+under `[data-theme="light"]`. The canvas reads them too, so overriding a token after importing the
+stylesheet restyles the whole chart:
+
+| Token | Used for |
+|---|---|
+| `--bg`, `--panel`, `--raised`, `--border` | page, menus and dialogs, inputs and hover, lines |
+| `--text`, `--muted`, `--dim` | text levels |
+| `--buy`, `--sell`, `--accent`, `--blue`, `--link` | up/down values, focus and highlights, active tools, links |
+| `--chart-text`, `--chart-grid`, `--chart-crosshair`, `--chart-crosshair-label` | axis labels, grid, crosshair |
+| `--hover`, `--veil`, `--backdrop`, `--shadow` | legend hover, loading veil, dialog backdrop, shadows |
+
+```css
+[data-theme="light"] { --chart-grid: #eef1f6; --accent: #7e57c2; }
+```
+
+Candle colours are a chart setting (Chart settings › Symbol), not a theme token.
 
 ## Development
 

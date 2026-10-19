@@ -19,3 +19,8 @@ export { LoadingDots } from "./indicators/IndicatorRow";
 export { ColorField } from "./indicators/SettingsDialog";
 export { uid } from "./uid";
 export { basicEngine, computeStudy, BASIC_CATEGORIES, BASIC_STUDIES, type Study } from "./basic/index";
+export {
+  THEME_KEY, THEME_MODES, applyDocumentTheme, canvasColors, isThemeMode, resolveTheme, systemTheme, useDocumentTheme, useResolvedTheme, useSystemTheme, useThemeMode,
+  type CanvasColors, type Theme, type ThemeMode,
+} from "./theme";
+export { default as ThemeToggle } from "./ThemeToggle";
