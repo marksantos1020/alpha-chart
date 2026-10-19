@@ -167,7 +167,7 @@ export class IndicatorRenderer {
   }
 
   private addSeries(p: PlotFrame, pane: number): ISeriesApi<SeriesType> {
-    const common = { priceLineVisible: false, lastValueVisible: false, title: "", crosshairMarkerVisible: true };
+    const common = { priceLineVisible: false, lastValueVisible: false, title: "", crosshairMarkerVisible: false };
     switch (p.style) {
       case "area":
         return this.chart.addSeries(AreaSeries, { ...common }, pane) as ISeriesApi<SeriesType>;
