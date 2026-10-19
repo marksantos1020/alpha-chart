@@ -7,8 +7,8 @@ import {
 type Target = Parameters<IPrimitivePaneRenderer["draw"]>[0];
 
 export const SELECTION_COLOR = "#2962FF";
-export const SELECTION_STEP = 12;
-export const SELECTION_MIN_PX = 14;
+export const SELECTION_STEP = 10;
+export const SELECTION_MIN_PX = 12;
 
 export interface SelectionSource {
   period(): number;
@@ -67,8 +67,8 @@ export class SelectionMarks implements ISeriesPrimitive<Time> {
     const bg = this.src.background();
     target.useMediaCoordinateSpace(({ context: ctx }) => {
       for (const { x, y } of pts) {
-        ctx.beginPath(); ctx.arc(x, y, 5.25, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
-        ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.lineWidth = 1.75; ctx.strokeStyle = SELECTION_COLOR; ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fillStyle = bg; ctx.fill();
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.lineWidth = 1.5; ctx.strokeStyle = SELECTION_COLOR; ctx.stroke();
       }
     });
   }

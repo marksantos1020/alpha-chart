@@ -104,15 +104,15 @@ ok("measure label: preferred side, flips at the pane edge, stays inside when nei
   assert.ok(r.y >= 4 && r.y + r.h <= 396);
 });
 
-ok("selection circles: every 12th bar by bar time, thinned by doubling only when closer than 14 px", () => {
-  assert.equal(selectionStep(12.5), 12);
-  assert.equal(selectionStep(1.25), 12);
-  assert.equal(selectionStep(0.6), 24);
-  assert.equal(selectionStep(0.2), 96);
+ok("selection circles: every 10th bar by bar time, thinned by doubling only when closer than 12 px", () => {
+  assert.equal(selectionStep(12.5), 10);
+  assert.equal(selectionStep(1.25), 10);
+  assert.equal(selectionStep(1), 20);
+  assert.equal(selectionStep(0.2), 80);
   const hour = 3600, marked = (step: number) => Array.from({ length: 200 }, (_, i) => 1_700_000_000 - 1_700_000_000 % hour + i * hour).filter((t) => isSelectionBar(t, hour, step));
-  assert.ok(marked(12).length === 16 || marked(12).length === 17);
-  for (let i = 1; i < marked(12).length; i++) assert.equal(marked(12)[i] - marked(12)[i - 1], 12 * hour);
-  assert.ok(marked(24).every((t) => marked(12).includes(t)));
+  assert.equal(marked(10).length, 20);
+  for (let i = 1; i < marked(10).length; i++) assert.equal(marked(10)[i] - marked(10)[i - 1], 10 * hour);
+  assert.ok(marked(20).every((t) => marked(10).includes(t)));
 });
 
 console.log(`GEOMETRY OK (${n})`);
