@@ -311,6 +311,8 @@ kbd { background: var(--raised); border: 1px solid var(--border); border-radius:
 .dt-flyout button span { flex: 1; }
 .dt-flyout button:hover { background: var(--btn-hover); }
 .dt-flyout button.on { background: var(--selected); color: var(--selected-text); }
+.chart-wrap .tv-lightweight-charts { cursor: crosshair; }
+.chart-wrap .tv-lightweight-charts:active { cursor: grabbing; }
 .draw-pointer canvas { cursor: pointer !important; }
 .draw-tool canvas { cursor: crosshair !important; }
 .draw-dragging canvas { cursor: grabbing !important; }
