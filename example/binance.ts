@@ -20,7 +20,30 @@ async function klines(symbol: string, interval: string, q: { limit: number; end?
   return ((await r.json()) as Kline[]).map(toBar);
 }
 
+const precisions = new Map<string, Promise<number | undefined>>();
+
+function tickDecimals(tick: string): number {
+  const t = tick.replace(/0+$/, ""), dot = t.indexOf(".");
+  return dot < 0 ? 0 : t.length - dot - 1;
+}
+
+function pricePrecision(symbol: string): Promise<number | undefined> {
+  let p = precisions.get(symbol);
+  if (!p) {
+    p = fetch(`https://data-api.binance.vision/api/v3/exchangeInfo?symbol=${symbol}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((info) => {
+        const f = info?.symbols?.[0]?.filters?.find((x: { filterType: string }) => x.filterType === "PRICE_FILTER");
+        return f ? tickDecimals(f.tickSize) : undefined;
+      })
+      .catch(() => undefined);
+    precisions.set(symbol, p);
+  }
+  return p;
+}
+
 export const binanceDatafeed: Datafeed = {
+  pricePrecision,
   async getBars(symbol, interval, { limit, end }) {
     let out: Bar[] = [];
     let before = end;

@@ -15,6 +15,7 @@ export interface ChartSettings {
   grid: boolean;
   status: { ohlc: boolean; change: boolean; volume: boolean; blocks: boolean; indicatorArgs: boolean; indicatorValues: boolean };
   countdown: "off" | "time" | "blocks";
+  precision: "default" | number;
 }
 
 export const DEFAULT_SETTINGS: ChartSettings = {
@@ -22,9 +23,15 @@ export const DEFAULT_SETTINGS: ChartSettings = {
   scaleMode: "normal", invert: false, autoScale: true, timezone: "UTC", grid: true,
   status: { ohlc: true, change: true, volume: true, blocks: true, indicatorArgs: true, indicatorValues: true },
   countdown: "time",
+  precision: "default",
 };
 
 const KEY = "alpha.chart.settings.v1";
+
+export const MAX_PRECISION = 8;
+export const PRECISIONS: ["default" | number, string][] = [
+  ["default", "Default"], ...Array.from({ length: MAX_PRECISION + 1 }, (_, d): [number, string] => [d, d === 0 ? "1" : `0.${"0".repeat(d - 1)}1`]),
+];
 
 const OLD_DEFAULT_COLORS = ["#2bb889", "#e35c70"];
 
@@ -33,6 +40,7 @@ export function normalizeSettings(raw: Partial<ChartSettings> | null | undefined
   if (s.upColor.toLowerCase() === OLD_DEFAULT_COLORS[0] && s.downColor.toLowerCase() === OLD_DEFAULT_COLORS[1]) {
     s.upColor = DEFAULT_SETTINGS.upColor; s.downColor = DEFAULT_SETTINGS.downColor;
   }
+  if (s.precision !== "default" && !(Number.isInteger(s.precision) && s.precision >= 0 && s.precision <= MAX_PRECISION)) s.precision = "default";
   return s;
 }
 

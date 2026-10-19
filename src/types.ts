@@ -16,6 +16,7 @@ export interface Datafeed {
   getBars(symbol: string, interval: string, req: { limit: number; end?: number }): Promise<Bar[]>;
   subscribeBars?(symbol: string, interval: string, onBars: (bars: Bar[]) => void): () => void;
   historyStart?(symbol: string): number | undefined;
+  pricePrecision?(symbol: string): number | undefined | Promise<number | undefined>;
 }
 
 export type SaveResult<T> = { ok: true } | { ok: false; conflict: { doc: T; updated: number } };

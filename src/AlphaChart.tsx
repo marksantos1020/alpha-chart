@@ -290,13 +290,25 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   intervalMsRef.current = IV_MS[interval] ?? 900e3;
 
   const events = useRef<IndicatorEvents>({});
-  const ind = useIndicators(engine, symbol, interval, candles, events);
+  const ind = useIndicators(engine, symbol, interval, candles, events, dataSeq);
   const engineRef = useRef(engine); engineRef.current = engine;
+
+  const [feedPrecision, setFeedPrecision] = useState<{ symbol: string; value: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    Promise.resolve(datafeed.pricePrecision?.(symbol))
+      .then((v) => { if (alive) setFeedPrecision(typeof v === "number" && v >= 0 ? { symbol, value: v } : null); })
+      .catch(() => { if (alive) setFeedPrecision(null); });
+    return () => { alive = false; };
+  }, [datafeed, symbol]);
+  const fixedPrecision = settings.precision !== "default" ? settings.precision : feedPrecision?.symbol === symbol ? feedPrecision.value : undefined;
+  const fixedPrecisionRef = useRef(fixedPrecision); fixedPrecisionRef.current = fixedPrecision;
+  const fmtBarPrice = (n: number) => (fixedPrecision === undefined ? fmtPrice(n) : n.toFixed(fixedPrecision));
 
   const symbolPrecision = useMemo(() => {
     const last = candles[candles.length - 1];
-    return last ? priceDecimals(last.close) : 6;
-  }, [candles.length > 0 ? candles[candles.length - 1].close : "", symbol]);
+    return fixedPrecision ?? (last ? priceDecimals(last.close) : 6);
+  }, [candles.length > 0 ? candles[candles.length - 1].close : "", symbol, fixedPrecision]);
 
   const dirRef = useRef(new Map<number, boolean>());
   useEffect(() => {
@@ -470,6 +482,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
         measureAxes: () => drawCtl.current?.layer.axisState() ?? null,
         barTimes: () => barsRef.current.times,
         axisLabels: () => priceLabels.current?.last ?? [],
+        pricePrecision: () => (series.current!.options().priceFormat as { precision: number }).precision,
         colors: () => { const o = c.options(); return { grid: o.grid.vertLines.color, text: o.layout.textColor, border: o.rightPriceScale.borderColor }; },
         indicatorSeries: () => c.panes().flatMap((p, pane) => p.getSeries().filter((x) => x !== series.current && x !== v)
           .map((x) => ({ pane, times: x.data().filter((d: any) => d.value !== undefined).map((d: any) => d.time as number) }))),
@@ -505,7 +518,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     const incremental = !fresh && !prepended && firstTime === firstTimeRef.current && lastTime >= lastTimeRef.current;
     seqRef.current = dataSeq;
     if (fresh) {
-      const prec = priceDecimals(last.close);
+      const prec = fixedPrecisionRef.current ?? priceDecimals(last.close);
       s.applyOptions({ priceFormat: { type: "price", precision: prec, minMove: Math.pow(10, -prec) }, ...(mainKind(settingsRef.current.barStyle) === "baseline" ? mainOptions(settingsRef.current, candles[0].close) : {}) } as any);
       renderer.current?.clearData();
       s.setData(mainData(candles) as any);
@@ -573,6 +586,13 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     chart.current.applyOptions(themeOptions(colorsRef.current));
     drawCtl.current?.refresh();
   }, [resolvedTheme, documentTheme]);
+
+  useEffect(() => {
+    const s = series.current, cs = candlesRef.current;
+    if (!s || !cs.length) return;
+    const prec = fixedPrecision ?? priceDecimals(cs[cs.length - 1].close);
+    s.applyOptions({ priceFormat: { type: "price", precision: prec, minMove: Math.pow(10, -prec) } });
+  }, [fixedPrecision, mainRev]);
 
   useEffect(() => {
     const mode = { normal: PriceScaleMode.Normal, log: PriceScaleMode.Logarithmic, percent: PriceScaleMode.Percentage, indexed: PriceScaleMode.IndexedTo100 }[settings.scaleMode];
@@ -767,14 +787,14 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
               <span className="sym">{symbol}{name ? ` · ${name}` : ""} · {IV_LABEL[interval] ?? interval}</span>
               {settings.status.ohlc && (
                 <>
-                  <span>O <b style={{ color: barColor }}>{show ? fmtPrice(show.open) : none}</b></span>
-                  <span>H <b style={{ color: barColor }}>{show ? fmtPrice(show.high) : none}</b></span>
-                  <span>L <b style={{ color: barColor }}>{show ? fmtPrice(show.low) : none}</b></span>
-                  <span>C <b style={{ color: barColor }}>{show ? fmtPrice(show.close) : none}</b></span>
+                  <span>O <b style={{ color: barColor }}>{show ? fmtBarPrice(show.open) : none}</b></span>
+                  <span>H <b style={{ color: barColor }}>{show ? fmtBarPrice(show.high) : none}</b></span>
+                  <span>L <b style={{ color: barColor }}>{show ? fmtBarPrice(show.low) : none}</b></span>
+                  <span>C <b style={{ color: barColor }}>{show ? fmtBarPrice(show.close) : none}</b></span>
                 </>
               )}
               {settings.status.change && (show
-                ? <span style={{ color: barColor }}>{chg >= 0 ? "+" : ""}{fmtPrice(chg)} ({chg >= 0 ? "+" : ""}{chgPct.toFixed(2)}%)</span>
+                ? <span style={{ color: barColor }}>{chg >= 0 ? "+" : ""}{fmtBarPrice(chg)} ({chg >= 0 ? "+" : ""}{chgPct.toFixed(2)}%)</span>
                 : <span className="muted">{none} ({none}%)</span>)}
               {show && <span className={`badge ${show.final ? "final" : showClosed ? "" : "open"}`}>{show.final ? "final" : showClosed ? "closed" : "open"}</span>}
               {show && barInfo && settings.status.blocks && barInfo(show)}

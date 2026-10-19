@@ -13,7 +13,7 @@ export { RANGES } from "./BottomBar";
 export type { BlockClock } from "./countdown";
 export { localChartStorage } from "./localStorage";
 export { mergeBars, useDatafeed, INTERVAL_MS, type DatafeedState, type ViewRequest } from "./useDatafeed";
-export { DEFAULT_SETTINGS, loadSettings, normalizeSettings, zoneOf, formatTime, TIMEZONES, type ChartSettings, type BarStyle } from "./settings";
+export { DEFAULT_SETTINGS, PRECISIONS, loadSettings, normalizeSettings, zoneOf, formatTime, TIMEZONES, type ChartSettings, type BarStyle } from "./settings";
 export { fmtNum, fmtPrice, priceDecimals } from "./format";
 export { LoadingDots } from "./indicators/IndicatorRow";
 export { ColorField } from "./indicators/SettingsDialog";

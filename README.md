@@ -74,6 +74,14 @@ interface Bar { time: number /* open time, epoch ms */; open: number; high: numb
 Intervals are TradingView resolution names: `"1" "5" "15" "30" "60" "120" "240" "D" "W"`. Bars may
 carry extra fields; the chart passes them to the indicator engine unchanged.
 
+### Price precision
+
+Chart settings › Symbol › Precision chooses the decimals of the axis, the price labels and the legend.
+"Default" uses `datafeed.pricePrecision(symbol)` when the datafeed provides it (a number of decimals,
+or a promise of one, e.g. from the exchange's tick size) and otherwise picks the decimals from the
+price itself, which suits very small prices such as 0.0019712. The example's Binance datafeed reads
+the tick size, so TAOUSDT shows `271.9` and BTCUSDT `82375.56`.
+
 ### Built-in indicators
 
 `basicEngine` gives the picker 26 common indicators, computed with TradingView's formulas and default

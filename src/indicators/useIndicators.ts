@@ -41,7 +41,7 @@ export interface IndicatorEvents {
   onTail?: (id: string, times: number[]) => void;
 }
 
-export function useIndicators(engine: IndicatorEngine | undefined, symbol: string, interval: string, bars: Bar[], events: React.MutableRefObject<IndicatorEvents>) {
+export function useIndicators(engine: IndicatorEngine | undefined, symbol: string, interval: string, bars: Bar[], events: React.MutableRefObject<IndicatorEvents>, dataSeq = 0) {
   const engineRef = useRef(engine);
   engineRef.current = engine;
   const [instances, setInstances] = useState<IndicatorInstance[]>(() => loadInstances(engine));
@@ -59,7 +59,7 @@ export function useIndicators(engine: IndicatorEngine | undefined, symbol: strin
   const frameKeys = useRef(new Map<string, string>());
   const worker = useRef<EngineConnection | null>(null);
   const sentInst = useRef(new Map<string, string>());
-  const sentData = useRef({ key: "", first: 0, len: 0 });
+  const sentData = useRef({ key: "", first: 0, len: 0, seq: 0 });
 
   useEffect(() => {
     if (!engine) return;
@@ -84,7 +84,7 @@ export function useIndicators(engine: IndicatorEngine | undefined, symbol: strin
       }
     });
     worker.current = w;
-    return () => { w.close(); worker.current = null; sentInst.current.clear(); sentData.current = { key: "", first: 0, len: 0 }; };
+    return () => { w.close(); worker.current = null; sentInst.current.clear(); sentData.current = { key: "", first: 0, len: 0, seq: 0 }; };
   }, [engine, events]);
 
   instancesRef.current = instances;
@@ -122,14 +122,14 @@ export function useIndicators(engine: IndicatorEngine | undefined, symbol: strin
     if (bars.length === 0) return;
     const first = bars[0].time;
     const grewByOne = bars.length === s.len + 1, same = bars.length === s.len;
-    if (key === s.key && first === s.first && (same || grewByOne)) {
+    if (key === s.key && first === s.first && dataSeq === s.seq && (same || grewByOne)) {
       w.post({ type: "bar", key, bar: bars[bars.length - 1] });
     } else {
       markPending(instancesRef.current.map((i) => i.id), true);
       w.post({ type: "data", key, bars });
     }
-    sentData.current = { key, first, len: bars.length };
-  }, [bars, symbol, interval, engine]);
+    sentData.current = { key, first, len: bars.length, seq: dataSeq };
+  }, [bars, symbol, interval, engine, dataSeq]);
 
   const frameFor = useCallback((id: string, key: string): IndicatorFrame | undefined => {
     const f = frames.current.get(id);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ColorField } from "./indicators/SettingsDialog";
-import { BAR_STYLES, DEFAULT_SETTINGS, TIMEZONES, type BarStyle, type ChartSettings, type ScaleMode } from "./settings";
+import { BAR_STYLES, DEFAULT_SETTINGS, PRECISIONS, TIMEZONES, type BarStyle, type ChartSettings, type ScaleMode } from "./settings";
 import type { BlockClock } from "./countdown";
 import { THEME_MODES, type ThemeMode } from "./theme";
 
@@ -49,6 +49,11 @@ export default function ChartSettingsDialog({ settings: s, onChange, onClose, bl
             <>
               <div className="form-row"><label><span>Bar style</span>
                 <select value={s.barStyle} onChange={(e) => set({ barStyle: e.target.value as BarStyle })}>{BAR_STYLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+              </label></div>
+              <div className="form-row"><label><span>Precision</span>
+                <select value={String(s.precision)} onChange={(e) => set({ precision: e.target.value === "default" ? "default" : Number(e.target.value) })} aria-label="Precision">
+                  {PRECISIONS.map(([k, l]) => <option key={String(k)} value={String(k)}>{l}</option>)}
+                </select>
               </label></div>
               <div className="form-row"><label><span>Up colour</span><ColorField value={s.upColor} onChange={(c) => set({ upColor: c })} /></label></div>
               <div className="form-row"><label><span>Down colour</span><ColorField value={s.downColor} onChange={(c) => set({ downColor: c })} /></label></div>
