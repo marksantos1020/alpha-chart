@@ -70,7 +70,7 @@ function InputField({ def, value, onChange }: { def: InputDef; value: unknown; o
 }
 
 const WIDTHS = [1, 2, 3, 4] as const;
-const VIS_INTERVALS: [string, string][] = [["1", "1m"], ["3", "3m"], ["5", "5m"], ["15", "15m"], ["30", "30m"], ["60", "1h"], ["120", "2h"], ["240", "4h"], ["D", "1D"]];
+const VIS_INTERVALS: [string, string][] = [["1", "1m"], ["5", "5m"], ["15", "15m"], ["30", "30m"], ["60", "1h"], ["120", "2h"], ["240", "4h"], ["D", "1D"]];
 
 export default function SettingsDialog({ instance, state, frame, title, onChange, onClose }: Props) {
   const [tab, setTab] = useState<"inputs" | "style" | "visibility">("inputs");
@@ -166,7 +166,7 @@ export default function SettingsDialog({ instance, state, frame, title, onChange
                   const on = !instance.intervals || instance.intervals.includes(key);
                   return (
                     <label className="check" key={key}><input type="checkbox" checked={on} onChange={(e) => {
-                      const cur = instance.intervals ?? VIS_INTERVALS.map(([k]) => k);
+                      const cur = (instance.intervals ?? VIS_INTERVALS.map(([k]) => k)).filter((k) => VIS_INTERVALS.some(([v]) => v === k));
                       const next = e.target.checked ? [...new Set([...cur, key])] : cur.filter((k) => k !== key);
                       onChange({ intervals: next.length === VIS_INTERVALS.length ? undefined : next });
                     }} /><span>{label}</span></label>
