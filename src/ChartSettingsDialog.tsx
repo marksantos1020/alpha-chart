@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ColorField } from "./indicators/SettingsDialog";
 import { BAR_STYLES, DEFAULT_SETTINGS, PRECISIONS, TIMEZONES, type BarStyle, type ChartSettings, type ScaleMode } from "./settings";
 import type { BlockClock } from "./countdown";
+import { CloseIcon } from "./icons";
 import { THEME_MODES, type ThemeMode } from "./theme";
 
 interface Props {
@@ -35,10 +36,10 @@ export default function ChartSettingsDialog({ settings: s, onChange, onClose, bl
   );
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal settings" role="dialog" aria-label="Chart settings">
+    <div className="modal-backdrop clear" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal settings wide" role="dialog" aria-label="Chart settings">
         <div className="modal-head"><span>Chart settings</span><div className="spacer" />
-          <button className="icon-btn" onClick={cancel} title="Close (Esc)">✕</button></div>
+          <button className="icon-btn" onClick={cancel} title="Close (Esc)" aria-label="Close"><CloseIcon /></button></div>
         <div className="modal-tabs">
           {([["symbol", "Symbol"], ["status", "Status line"], ["scales", "Scales"], ["canvas", "Canvas"], ["block", block ? "Block" : "Countdown"]] as [Tab, string][]).map(([k, l]) => (
             <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{l}</button>
@@ -110,7 +111,7 @@ export default function ChartSettingsDialog({ settings: s, onChange, onClose, bl
           )}
         </div>
         <div className="modal-foot">
-          <button className="btn" onClick={() => onChange({ ...DEFAULT_SETTINGS })}>Defaults</button>
+          <button className="btn ghost" onClick={() => onChange({ ...DEFAULT_SETTINGS })}>Defaults</button>
           <div className="spacer" />
           <button className="btn" onClick={cancel}>Cancel</button>
           <button className="btn primary" onClick={onClose}>Ok</button>

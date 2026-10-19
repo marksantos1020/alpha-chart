@@ -17,6 +17,17 @@ export const Chevron = ({ up = false, size = 15 }: { up?: boolean; size?: number
   </svg>
 );
 
+export const CloseIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" aria-hidden="true"><path d="M3.5 3.5l11 11M14.5 3.5l-11 11" /></svg>
+);
+export const InfoIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+    <circle cx="9" cy="9" r="8" fill="currentColor" />
+    <circle cx="9" cy="5.4" r="1.1" style={{ fill: "var(--panel)" }} />
+    <path d="M9 8v5.2" strokeWidth="1.8" strokeLinecap="round" style={{ stroke: "var(--panel)" }} />
+  </svg>
+);
+
 const small = (children: ReactNode) => (
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
 );

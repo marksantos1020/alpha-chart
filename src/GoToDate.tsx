@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CloseIcon } from "./icons";
 
 interface Props { onGo: (ms: number) => void; onClose: () => void }
 
@@ -18,7 +19,7 @@ export default function GoToDate({ onGo, onClose }: Props) {
   return (
     <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal settings goto" role="dialog" aria-label="Go to date">
-        <div className="modal-head"><span>Go to</span><div className="spacer" /><button className="icon-btn" onClick={onClose}>✕</button></div>
+        <div className="modal-head"><span>Go to</span><div className="spacer" /><button className="icon-btn" onClick={onClose} title="Close (Esc)" aria-label="Close"><CloseIcon /></button></div>
         <div className="modal-body">
           <div className="form-row">
             <label><span>Date (UTC)</span><input type="date" value={date} min="2025-02-13" max={today} onChange={(e) => setDate(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") go(); }} autoFocus /></label>

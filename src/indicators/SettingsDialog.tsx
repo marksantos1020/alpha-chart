@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { CloseIcon, InfoIcon, Chevron } from "../icons";
 import type { IndicatorFrame, IndicatorInstance, IndicatorState, InputDef, PlotStyle } from "./types";
 
 interface Props {
@@ -37,12 +38,17 @@ export function ColorField({ value, onChange }: { value: string; onChange: (c: s
   );
 }
 
+export function optionLabel(o: string): string {
+  if (/^[a-z]+\d$/.test(o)) return o.toUpperCase();
+  return o.charAt(0).toUpperCase() + o.slice(1);
+}
+
 function InputField({ def, value, onChange }: { def: InputDef; value: unknown; onChange: (v: unknown) => void }) {
   switch (def.type) {
     case "bool":
       return <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
     case "select": case "source":
-      return <select value={String(value)} onChange={(e) => onChange(e.target.value)}>{def.options?.map((o) => <option key={o} value={o}>{o}</option>)}</select>;
+      return <select value={String(value)} onChange={(e) => onChange(e.target.value)}>{def.options?.map((o) => <option key={o} value={o}>{def.type === "source" ? optionLabel(o) : o}</option>)}</select>;
     case "color":
       return <ColorField value={String(value)} onChange={onChange} />;
     case "string":
@@ -69,6 +75,7 @@ const VIS_INTERVALS: [string, string][] = [["1", "1m"], ["3", "3m"], ["5", "5m"]
 export default function SettingsDialog({ instance, state, frame, title, onChange, onClose }: Props) {
   const [tab, setTab] = useState<"inputs" | "style" | "visibility">("inputs");
   const [original] = useState(() => structuredClone(instance));
+  const [menu, setMenu] = useState(false);
   const defs = state?.inputs ?? [];
   const values = (d: InputDef) => (instance.inputs[d.name] !== undefined ? instance.inputs[d.name] : d.default);
 
@@ -98,13 +105,41 @@ export default function SettingsDialog({ instance, state, frame, title, onChange
   const hlines = frame?.hlines ?? [];
   const seen = new Set<string>();
 
+  const info = (d: InputDef) => d.tooltip ? <span className="field-info" title={d.tooltip}><InfoIcon /></span> : null;
+  const field = (row: InputDef[]) => {
+    const [d, ...rest] = row;
+    if (d.type === "bool" && rest.length === 0) {
+      return (
+        <label className="check" key={d.name} title={d.tooltip}>
+          <InputField def={d} value={values(d)} onChange={(v) => setInput(d.name, v)} /><span>{d.name}</span>
+        </label>
+      );
+    }
+    return [
+      <label key={d.name}>
+        <span className="field-name">{d.name}</span>
+        <span className={rest.length ? "field-ctl part" : "field-ctl"}>
+          <InputField def={d} value={values(d)} onChange={(v) => setInput(d.name, v)} />{rest.length === 0 && info(d)}
+        </span>
+      </label>,
+      rest.length > 0 && (
+        <span className="field-rest" key={`${d.name}:rest`}>
+          {rest.map((r) => (
+            <label key={r.name} title={r.tooltip}><span>{r.name}</span><InputField def={r} value={values(r)} onChange={(v) => setInput(r.name, v)} /></label>
+          ))}
+        </span>
+      ),
+    ];
+  };
+  const cancel = () => { onChange(original); onClose(); };
+
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="modal-backdrop clear" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal settings" role="dialog" aria-label={`${title} settings`}>
         <div className="modal-head">
           <span>{title}</span>
           <div className="spacer" />
-          <button className="icon-btn" onClick={() => { onChange(original); onClose(); }} title="Close (Esc)">✕</button>
+          <button className="icon-btn" onClick={cancel} title="Close (Esc)" aria-label="Close"><CloseIcon /></button>
         </div>
         <div className="modal-tabs">
           <button className={tab === "inputs" ? "on" : ""} onClick={() => setTab("inputs")}>Inputs</button>
@@ -114,39 +149,31 @@ export default function SettingsDialog({ instance, state, frame, title, onChange
         <div className="modal-body">
           {state?.error && <div className="form-error">{state.error}</div>}
           {tab === "inputs" && (
-            groups.length === 0 ? <div className="empty">This indicator has no inputs</div> :
-            groups.map((g) => (
-              <section key={g.name || "_"}>
-                {g.name && <h4>{g.name}</h4>}
-                {g.rows.map((row) => (
-                  <div className="form-row" key={row.map((d) => d.name).join("|")}>
-                    {row.map((d) => (
-                      <label key={d.name} title={d.tooltip}>
-                        <span>{d.name}{d.tooltip ? " ⓘ" : ""}</span>
-                        <InputField def={d} value={values(d)} onChange={(v) => setInput(d.name, v)} />
-                      </label>
-                    ))}
-                  </div>
-                ))}
-              </section>
-            ))
+            groups.length === 0 ? <div className="empty">This indicator has no inputs</div> : (
+              <div className="field-grid">
+                {groups.map((g) => [
+                  g.name ? <h4 key={`h:${g.name}`}>{g.name}</h4> : null,
+                  ...g.rows.map(field),
+                ])}
+              </div>
+            )
           )}
           {tab === "visibility" && (
-            <section>
+            <>
               <h4>Show on intervals</h4>
-              {VIS_INTERVALS.map(([key, label]) => {
-                const on = !instance.intervals || instance.intervals.includes(key);
-                return (
-                  <div className="form-row" key={key}>
-                    <label className="check"><input type="checkbox" checked={on} onChange={(e) => {
+              <div className="vis-grid">
+                {VIS_INTERVALS.map(([key, label]) => {
+                  const on = !instance.intervals || instance.intervals.includes(key);
+                  return (
+                    <label className="check" key={key}><input type="checkbox" checked={on} onChange={(e) => {
                       const cur = instance.intervals ?? VIS_INTERVALS.map(([k]) => k);
                       const next = e.target.checked ? [...new Set([...cur, key])] : cur.filter((k) => k !== key);
                       onChange({ intervals: next.length === VIS_INTERVALS.length ? undefined : next });
                     }} /><span>{label}</span></label>
-                  </div>
-                );
-              })}
-            </section>
+                  );
+                })}
+              </div>
+            </>
           )}
           {tab === "style" && (
             <>
@@ -201,9 +228,16 @@ export default function SettingsDialog({ instance, state, frame, title, onChange
           )}
         </div>
         <div className="modal-foot">
-          <button className="btn" onClick={() => onChange(tab === "inputs" ? { inputs: {} } : tab === "style" ? { style: {} } : { intervals: undefined })}>Defaults</button>
+          <div className="defaults">
+            <button className="btn ghost" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>Defaults<Chevron up={menu} size={16} /></button>
+            {menu && (
+              <div className="defaults-menu" role="menu">
+                <button role="menuitem" onClick={() => { onChange({ inputs: {}, style: {}, intervals: undefined }); setMenu(false); }}>Reset settings</button>
+              </div>
+            )}
+          </div>
           <div className="spacer" />
-          <button className="btn" onClick={() => { onChange(original); onClose(); }}>Cancel</button>
+          <button className="btn" onClick={cancel}>Cancel</button>
           <button className="btn primary" onClick={onClose}>Ok</button>
         </div>
       </div>

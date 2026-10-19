@@ -451,6 +451,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     chart.current = c; series.current = s; vol.current = v;
     const background = () => colorsRef.current?.bg ?? "#151b23";
     renderer.current = new IndicatorRenderer(c, background);
+    renderer.current.setFront(() => series.current);
+    renderer.current.bringToFront();
     bindMain.current = (main: ISeriesApi<SeriesType>) => {
       drawCtl.current?.destroy();
       if (priceLabels.current) { try { series.current?.detachPrimitive(priceLabels.current); } catch {} }
@@ -625,6 +627,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       s.applyOptions({ priceFormat: fmt } as any);
       s.priceScale().applyOptions({ scaleMargins: { top: 0.06, bottom: 0.26 } });
       series.current = s;
+      renderer.current?.bringToFront();
       mainStyle.current = settings.barStyle;
       bindMain.current(s);
       const cs = candlesRef.current;

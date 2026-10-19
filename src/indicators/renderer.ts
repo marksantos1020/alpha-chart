@@ -75,11 +75,18 @@ export class IndicatorRenderer {
   private candleUp: (timeMs: number) => boolean | undefined = () => undefined;
   private paneLabels: { prim: ValueLabels; host: ISeriesApi<SeriesType> }[] = [];
   private viewEnd: () => ViewEnd | null = () => null;
+  private front: () => ISeriesApi<SeriesType> | null = () => null;
 
   constructor(private chart: IChartApi, private background: () => string = () => "#151b23") {}
 
   setCandleDirection(fn: (timeMs: number) => boolean | undefined) { this.candleUp = fn; }
   setViewEnd(fn: () => ViewEnd | null) { this.viewEnd = fn; }
+  setFront(fn: () => ISeriesApi<SeriesType> | null) { this.front = fn; }
+
+  bringToFront() {
+    const s = this.front();
+    if (s) s.setSeriesOrder(s.getPane().getSeries().length - 1);
+  }
 
   private sig(items: RenderItem[]): string {
     return items.map((it) => {
@@ -156,6 +163,7 @@ export class IndicatorRenderer {
     }
     const panes = this.chart.panes();
     panes.forEach((p, i) => p.setStretchFactor(i === 0 ? 3 : 1));
+    this.bringToFront();
   }
 
   private addSeries(p: PlotFrame, pane: number): ISeriesApi<SeriesType> {

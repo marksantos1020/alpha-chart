@@ -25,4 +25,4 @@ export {
 } from "./theme";
 export { default as ThemeToggle } from "./ThemeToggle";
 export { default as ChartTypeMenu, CHART_TYPE_ICONS } from "./ChartTypeMenu";
-export { LegendIcons } from "./icons";
+export { LegendIcons, CloseIcon, InfoIcon } from "./icons";

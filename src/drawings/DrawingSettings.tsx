@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ColorField } from "../indicators/SettingsDialog";
+import { CloseIcon } from "../icons";
 import { TOOL_LABEL, type Drawing, type DrawingStyle, type FibLevel } from "./types";
 
 interface Props {
@@ -30,10 +31,10 @@ export default function DrawingSettings({ drawing, onChange, onDone, onCancel, i
   const setLevel = (i: number, patch: Partial<FibLevel>) => set({ levels: (s.levels ?? []).map((l, k) => (k === i ? { ...l, ...patch } : l)) });
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onDone(changed()); }}>
+    <div className="modal-backdrop clear" onMouseDown={(e) => { if (e.target === e.currentTarget) onDone(changed()); }}>
       <div className="modal settings" role="dialog" aria-label={`${TOOL_LABEL[drawing.type]} settings`}>
         <div className="modal-head"><span>{TOOL_LABEL[drawing.type]}</span><div className="spacer" />
-          <button className="icon-btn" onClick={() => onCancel(original)} title="Close (Esc)">✕</button></div>
+          <button className="icon-btn" onClick={() => onCancel(original)} title="Close (Esc)" aria-label="Close"><CloseIcon /></button></div>
         <div className="modal-tabs">
           <button className={tab === "style" ? "on" : ""} onClick={() => setTab("style")}>Style</button>
           {hasText && <button className={tab === "text" ? "on" : ""} onClick={() => setTab("text")}>Text</button>}

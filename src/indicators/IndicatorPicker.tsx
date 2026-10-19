@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CloseIcon } from "../icons";
 import type { IndicatorEngine, StudyEntry } from "../types";
 
 interface Props {
@@ -63,7 +64,7 @@ export default function IndicatorPicker({ engine, onAdd, onAddStrategy, initialC
         <div className="modal-head">
           <span>Indicators</span>
           <div className="spacer" />
-          <button className="icon-btn" onClick={onClose} title="Close (Esc)">✕</button>
+          <button className="icon-btn" onClick={onClose} title="Close (Esc)" aria-label="Close"><CloseIcon /></button>
         </div>
         <div className="picker-search">
           <input ref={input} className="search" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)}
