@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { LegendIcons } from "../icons";
 
 export interface RowValue { text: string; color: string }
 
@@ -18,6 +19,7 @@ interface Props {
   onMovePane: () => void;
   onMove: (dir: -1 | 1) => void;
   onReset: () => void;
+  onSource?: () => void;
   loading?: boolean;
   onInterval?: boolean;
   dragId?: string;
@@ -54,10 +56,11 @@ export default function IndicatorRow(p: Props) {
         : p.visible && p.values.map((v, i) => <span key={i} className="ind-val" style={{ color: v.color }}>{v.text}</span>)}
       {p.loading && !p.error && <LoadingDots />}
       <span className="ind-ctl">
-        <button title={p.visible ? "Hide" : "Show"} onClick={p.onToggle}>{p.visible ? "👁" : "◌"}</button>
-        <button title="Settings" onClick={p.onSettings}>⚙</button>
-        <button title="More" onClick={() => setMenu((m) => !m)}>⋯</button>
-        <button title="Remove" onClick={p.onRemove}>✕</button>
+        <button title={p.visible ? "Hide" : "Show"} aria-label={p.visible ? "Hide" : "Show"} onClick={p.onToggle}>{p.visible ? <LegendIcons.eye /> : <LegendIcons.eyeOff />}</button>
+        <button title="Settings" aria-label="Settings" onClick={p.onSettings}><LegendIcons.settings /></button>
+        {p.onSource && <button title="Source code" aria-label="Source code" onClick={p.onSource}><LegendIcons.source /></button>}
+        <button title="Remove" aria-label="Remove" onClick={p.onRemove}><LegendIcons.remove /></button>
+        <button title="More" aria-label="More" aria-haspopup="menu" onClick={() => setMenu((m) => !m)}><LegendIcons.more /></button>
       </span>
       {menu && (
         <div className="ind-menu" role="menu">

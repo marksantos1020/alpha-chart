@@ -52,7 +52,7 @@ import { INTERVAL_MS, useDatafeed } from "./useDatafeed";
 import { localChartStorage } from "./localStorage";
 import { HlcArea } from "./hlcArea";
 import ChartTypeMenu from "./ChartTypeMenu";
-import { Chevron, IndicatorsIcon, RedoIcon, UndoIcon } from "./icons";
+import { Chevron, IndicatorsIcon, LegendIcons, RedoIcon, UndoIcon } from "./icons";
 import { canvasColors, useDocumentTheme, useResolvedTheme, type CanvasColors, type ThemeMode } from "./theme";
 
 export interface AlphaChartProps {
@@ -75,6 +75,7 @@ export interface AlphaChartProps {
   barInfoLabel?: string;
   block?: BlockClock;
   theme?: ThemeMode;
+  onIndicatorSource?: (libraryId: string) => void;
   onThemeChange?: (mode: ThemeMode) => void;
   debug?: boolean;
 }
@@ -204,7 +205,7 @@ function overlayFrame(f: OverlayFrame | null | undefined): OverlayFrame | null {
 
 const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaChart(
   { datafeed, symbol, interval, onInterval, intervals, name, engine, storage = DEFAULT_STORAGE, overlay, legendRows, onAddStrategy, pickerRequest,
-    toolbar, actions, volumeUnit, barInfo, barInfoLabel, block, theme, onThemeChange, debug }, ref) {
+    toolbar, actions, volumeUnit, barInfo, barInfoLabel, block, theme, onThemeChange, onIndicatorSource, debug }, ref) {
   const resolvedTheme = useResolvedTheme(theme);
   const documentTheme = useDocumentTheme();
   const feed = useDatafeed(datafeed, symbol, interval, onInterval, intervals);
@@ -809,6 +810,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     onMovePane: () => ind.update(r.inst.id, { overlay: !r.overlay }),
     onMove: (d: -1 | 1) => ind.move(r.inst.id, d),
     onReset: () => ind.update(r.inst.id, { inputs: {}, style: {}, overlay: null }),
+    onSource: onIndicatorSource ? () => onIndicatorSource(r.inst.libraryId) : undefined,
   });
 
   const show = blank ? undefined : candleAt;
@@ -871,8 +873,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
                       ? <span className="ind-val" style={{ color: show.close >= show.open ? settings.upColor : settings.downColor }}>{fmtNum(show.volume ?? NaN, 2)}</span>
                       : <span className="ind-val muted">{none}</span>)}
                     <span className="ind-ctl">
-                      <button title={volVisible ? "Hide" : "Show"} onClick={() => setVolState(volVisible ? "0" : "1")}>{volVisible ? "👁" : "◌"}</button>
-                      <button title="Remove" onClick={() => setVolState("x")}>✕</button>
+                      <button title={volVisible ? "Hide" : "Show"} aria-label={volVisible ? "Hide" : "Show"} onClick={() => setVolState(volVisible ? "0" : "1")}>{volVisible ? <LegendIcons.eye /> : <LegendIcons.eyeOff />}</button>
+                      <button title="Remove" aria-label="Remove" onClick={() => setVolState("x")}><LegendIcons.remove /></button>
                     </span>
                   </div>
                 )}

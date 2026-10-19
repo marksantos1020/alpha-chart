@@ -16,3 +16,17 @@ export const Chevron = ({ up = false, size = 15 }: { up?: boolean; size?: number
     <path d={up ? "M4.5 10l3.5-3.5 3.5 3.5" : "M4.5 6.5L8 10l3.5-3.5"} />
   </svg>
 );
+
+const small = (children: ReactNode) => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
+);
+const EYE = "M1.5 9C3.3 5.8 5.9 4.2 9 4.2s5.7 1.6 7.5 4.8c-1.8 3.2-4.4 4.8-7.5 4.8S3.3 12.2 1.5 9z";
+
+export const LegendIcons = {
+  eye: () => small(<><path d={EYE} /><circle cx="9" cy="9" r="2.3" /></>),
+  eyeOff: () => small(<><path d={EYE} /><circle cx="9" cy="9" r="2.3" /><path d="M3 15L15 3" /></>),
+  settings: () => small(<><path d="M9 2.3l5.8 3.35v6.7L9 15.7l-5.8-3.35v-6.7z" /><circle cx="9" cy="9" r="2.3" /></>),
+  source: () => small(<path d="M6.5 3.5C5.2 3.5 5 4.2 5 5.5v1.3C5 8 4.4 8.8 3 9c1.4.2 2 1 2 2.2v1.3c0 1.3.2 2 1.5 2M11.5 3.5c1.3 0 1.5.7 1.5 2v1.3c0 1.2.6 2 2 2.2-1.4.2-2 1-2 2.2v1.3c0 1.3-.2 2-1.5 2" />),
+  remove: () => small(<><path d="M3.5 5h11M7 5V3.3h4V5" /><path d="M5 5l.8 9.7h6.4L13 5" /><path d="M7.6 7.5v4.7M10.4 7.5v4.7" /></>),
+  more: () => small(<><circle cx="4" cy="9" r="1.2" /><circle cx="9" cy="9" r="1.2" /><circle cx="14" cy="9" r="1.2" /></>),
+};
