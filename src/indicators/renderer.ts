@@ -4,6 +4,7 @@ import {
 } from "lightweight-charts";
 import { BandPrimitive } from "./bandPrimitive";
 import { BgPrimitive } from "./bgPrimitive";
+import { ValueLabels, type ValueLabel } from "../valueLabels";
 import type { BandFrame, HLine, IndicatorFrame, PlotFrame, PlotStyle } from "./types";
 
 export interface RenderItem {
@@ -60,20 +61,25 @@ export function toPoints(times: Float64Array, values: Float64Array, colorAt?: (i
   return out;
 }
 
-interface PlotHandle { api: ISeriesApi<SeriesType>; plot: PlotFrame; index: number; pane: number }
+interface PlotHandle { api: ISeriesApi<SeriesType>; plot: PlotFrame; index: number; pane: number; label: boolean; color: string; colorAt?: (i: number, v: number) => string | undefined }
 interface ItemHandle {
   plots: PlotHandle[]; bands: { prim: BandPrimitive; host: ISeriesApi<SeriesType> }[];
   bgs: { prim: BgPrimitive; host: ISeriesApi<SeriesType> }[]; lines: { host: ISeriesApi<SeriesType>; line: IPriceLine; h: HLine }[];
 }
 
+export interface ViewEnd { timeMs: number; latest: boolean }
+
 export class IndicatorRenderer {
   private handles = new Map<string, ItemHandle>();
   private signature = "";
   private candleUp: (timeMs: number) => boolean | undefined = () => undefined;
+  private paneLabels: { prim: ValueLabels; host: ISeriesApi<SeriesType> }[] = [];
+  private viewEnd: () => ViewEnd | null = () => null;
 
-  constructor(private chart: IChartApi) {}
+  constructor(private chart: IChartApi, private background: () => string = () => "#151b23") {}
 
   setCandleDirection(fn: (timeMs: number) => boolean | undefined) { this.candleUp = fn; }
+  setViewEnd(fn: () => ViewEnd | null) { this.viewEnd = fn; }
 
   private sig(items: RenderItem[]): string {
     return items.map((it) => {
@@ -97,6 +103,8 @@ export class IndicatorRenderer {
   }
 
   private clear() {
+    for (const l of this.paneLabels) { try { l.host.detachPrimitive(l.prim); } catch {} }
+    this.paneLabels = [];
     for (const h of this.handles.values()) {
       for (const b of h.bands) { try { b.host.detachPrimitive(b.prim); } catch {} }
       for (const b of h.bgs) { try { b.host.detachPrimitive(b.prim); } catch {} }
@@ -113,7 +121,14 @@ export class IndicatorRenderer {
     for (const it of items) this.handles.set(it.id, { plots: [], bands: [], bgs: [], lines: [] });
     for (const w of wanted) {
       const api = this.addSeries(w.p, w.pane);
-      this.handles.get(w.it.id)!.plots.push({ api, plot: w.p, index: w.index, pane: w.pane });
+      this.handles.get(w.it.id)!.plots.push({ api, plot: w.p, index: w.index, pane: w.pane, label: false, color: w.p.color });
+    }
+    const firstIn = new Map<number, ISeriesApi<SeriesType>>();
+    for (const h of this.handles.values()) for (const p of h.plots) if (p.pane > 0 && !firstIn.has(p.pane)) firstIn.set(p.pane, p.api);
+    for (const [pane, host] of firstIn) {
+      const prim = new ValueLabels({ labels: () => this.labelsFor(pane), background: this.background });
+      host.attachPrimitive(prim);
+      this.paneLabels.push({ prim, host });
     }
     for (const it of items) {
       const h = this.handles.get(it.id)!;
@@ -144,7 +159,7 @@ export class IndicatorRenderer {
   }
 
   private addSeries(p: PlotFrame, pane: number): ISeriesApi<SeriesType> {
-    const common = { priceLineVisible: false, lastValueVisible: true, title: "", crosshairMarkerVisible: true };
+    const common = { priceLineVisible: false, lastValueVisible: false, title: "", crosshairMarkerVisible: true };
     switch (p.style) {
       case "area":
         return this.chart.addSeries(AreaSeries, { ...common }, pane) as ISeriesApi<SeriesType>;
@@ -170,7 +185,7 @@ export class IndicatorRenderer {
     const width = (st?.width ?? p.width ?? 1) as 1 | 2 | 3 | 4;
     const lineStyle = LINE_STYLE[st?.lineStyle ?? p.lineStyle] ?? LineStyle.Solid;
     const shown = visible && st?.visible !== false && p.display !== "none" && p.display !== "legend";
-    const base = { visible: shown, priceFormat, lastValueVisible: p.display !== "pane" };
+    const base = { visible: shown, priceFormat, lastValueVisible: false };
     switch (p.style) {
       case "area": return { ...base, lineColor: color, lineWidth: width, lineStyle, topColor: withAlpha(color, 0.28), bottomColor: withAlpha(color, 0.02) };
       case "histogram": case "columns": return { ...base, color };
@@ -195,6 +210,11 @@ export class IndicatorRenderer {
       if (!p) continue;
       ph.plot = p;
       const st = it.style[p.title];
+      ph.label = it.visible && st?.visible !== false && p.display !== "none" && p.display !== "legend" && p.display !== "pane";
+      ph.color = p.style === "baseline" ? "" : st?.color ?? p.color;
+      ph.colorAt = this.colorFn(p, st) ?? (p.style === "baseline"
+        ? ((_i: number, v: number) => (v >= (p.baseValue ?? 0) ? st?.colorUp ?? p.colorUp ?? "#26A69A" : st?.colorDown ?? p.colorDown ?? "#EF5350"))
+        : undefined);
       ph.api.applyOptions(this.options(p, st, it.visible, it.priceFormat) as any);
       ph.api.setData(toPoints(p.times, p.values, this.colorFn(p, st)) as any);
     }
@@ -221,6 +241,7 @@ export class IndicatorRenderer {
     for (const ph of h.plots) {
       const p = it.frame.plots[ph.index];
       if (!p) continue;
+      ph.plot = p;
       const colorAt = this.colorFn(p, it.style[p.title]);
       for (const t of times) {
         let i = p.times.length - 1;
@@ -245,6 +266,26 @@ export class IndicatorRenderer {
       for (const b of h.bands) b.prim.set({ ...b.prim.data, times: none, upper: none, lower: none });
       for (const b of h.bgs) b.prim.set({ ...b.prim.data, times: [] });
     }
+  }
+
+  labelsFor(pane: number): ValueLabel[] {
+    const out: ValueLabel[] = [];
+    const end = this.viewEnd(), filled = !end || end.latest;
+    for (const h of this.handles.values()) {
+      for (const ph of h.plots) {
+        if (ph.pane !== pane || !ph.label) continue;
+        const v = ph.plot.values, t = ph.plot.times;
+        let i = v.length - 1;
+        if (end && !end.latest) while (i >= 0 && t[i] > end.timeMs) i--;
+        while (i >= 0 && !Number.isFinite(v[i])) i--;
+        if (i < 0) continue;
+        const y = ph.api.priceToCoordinate(v[i]);
+        if (y === null) continue;
+        const color = ph.colorAt?.(i, v[i]) || ph.color || "#787B86";
+        out.push({ y, text: ph.api.priceFormatter().format(v[i]), color, filled });
+      }
+    }
+    return out;
   }
 
   paneOf(id: string): number | null { return this.handles.get(id)?.plots[0]?.pane ?? null; }

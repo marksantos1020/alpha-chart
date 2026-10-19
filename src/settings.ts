@@ -18,7 +18,7 @@ export interface ChartSettings {
 }
 
 export const DEFAULT_SETTINGS: ChartSettings = {
-  barStyle: "candles", upColor: "#2bb889", downColor: "#e35c70", wicks: true, borders: false, lastPriceLine: true,
+  barStyle: "candles", upColor: "#089981", downColor: "#F23645", wicks: true, borders: false, lastPriceLine: true,
   scaleMode: "normal", invert: false, autoScale: true, timezone: "UTC", grid: true,
   status: { ohlc: true, change: true, volume: true, blocks: true, indicatorArgs: true, indicatorValues: true },
   countdown: "time",
@@ -26,11 +26,18 @@ export const DEFAULT_SETTINGS: ChartSettings = {
 
 const KEY = "alpha.chart.settings.v1";
 
+const OLD_DEFAULT_COLORS = ["#2bb889", "#e35c70"];
+
+export function normalizeSettings(raw: Partial<ChartSettings> | null | undefined): ChartSettings {
+  const s = { ...DEFAULT_SETTINGS, ...(raw ?? {}), status: { ...DEFAULT_SETTINGS.status, ...(raw?.status ?? {}) } };
+  if (s.upColor.toLowerCase() === OLD_DEFAULT_COLORS[0] && s.downColor.toLowerCase() === OLD_DEFAULT_COLORS[1]) {
+    s.upColor = DEFAULT_SETTINGS.upColor; s.downColor = DEFAULT_SETTINGS.downColor;
+  }
+  return s;
+}
+
 export function loadSettings(): ChartSettings {
-  try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}");
-    return { ...DEFAULT_SETTINGS, ...raw, status: { ...DEFAULT_SETTINGS.status, ...(raw.status ?? {}) } };
-  } catch { return DEFAULT_SETTINGS; }
+  try { return normalizeSettings(JSON.parse(localStorage.getItem(KEY) ?? "{}")); } catch { return DEFAULT_SETTINGS; }
 }
 export function saveSettings(s: ChartSettings) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {} }
 

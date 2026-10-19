@@ -37,6 +37,16 @@ const source = (d = "close"): InputDef => ({ name: "Source", type: "source", def
 const levels = (hi: number, lo: number, mid?: number): HLine[] => [
   { value: hi, color: GREY, style: "dashed" }, ...(mid === undefined ? [] : [{ value: mid, color: GREY, style: "dotted" }]), { value: lo, color: GREY, style: "dashed" },
 ];
+export const MA_TYPES = ["SMA", "EMA", "SMMA (RMA)", "WMA", "VWMA"];
+function movingAverage(type: string, s: Arr, v: Arr, len: number): Arr {
+  switch (type) {
+    case "EMA": return ema(s, len);
+    case "SMMA (RMA)": return rma(s, len);
+    case "WMA": return wma(s, len);
+    case "VWMA": return map2(sma(map2(s, v, (a, b) => a * b), len), sma(v, len), (a, b) => a / b);
+    default: return sma(s, len);
+  }
+}
 const band = (hi: number, lo: number): BandOut => ({ title: "Background", upper: hi, lower: lo, color: OSC_FILL });
 
 function ma(id: string, name: string, shortTitle: string, len: number, f: (x: Arr, n: number) => Arr, description: string, color = BLUE): Study {
@@ -135,12 +145,14 @@ export const STUDIES: Study[] = [
   },
   {
     id: "bbands", name: "Bollinger Bands", shortTitle: "BB", overlay: true, category: "Bands & channels",
-    description: "SMA basis with standard-deviation bands", inputs: [int("Length", 20), source(), float("StdDev", 2)], config: { shortTitle: "BB", overlay: true },
+    description: "Moving-average basis with standard-deviation bands",
+    inputs: [int("Length", 20), { name: "Basis MA type", type: "select", default: "SMA", options: MA_TYPES }, source(), float("StdDev", 2)],
+    config: { shortTitle: "BB", overlay: true },
     run: (x) => {
-      const s = x.src(x.p.Source), basis = sma(s, x.p.Length), dev = stdev(s, x.p.Length), k = x.p.StdDev;
+      const s = x.src(x.p.Source), basis = movingAverage(x.p["Basis MA type"], s, x.v, x.p.Length), dev = stdev(s, x.p.Length), k = x.p.StdDev;
       const upper = map2(basis, dev, (b, d) => b + k * d), lower = map2(basis, dev, (b, d) => b - k * d);
       return {
-        plots: [{ title: "Basis", values: basis, color: ORANGE }, { title: "Upper", values: upper, color: BLUE }, { title: "Lower", values: lower, color: TEAL }],
+        plots: [{ title: "Basis", values: basis, color: BLUE }, { title: "Upper", values: upper, color: RED }, { title: "Lower", values: lower, color: TEAL }],
         bands: [{ title: "Background", upper, lower, color: BAND_FILL }],
       };
     },

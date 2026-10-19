@@ -6,6 +6,7 @@ import {
   CandlestickSeries,
   ColorType,
   LineSeries,
+  MismatchDirection,
   PriceScaleMode,
   CrosshairMode,
   HistogramSeries,
@@ -38,11 +39,12 @@ import DrawingSettings from "./drawings/DrawingSettings";
 import DrawingMenu from "./drawings/DrawingMenu";
 import type { Drawing } from "./drawings/types";
 import { setLabelZone } from "./drawings/layer";
-import { DEFAULT_SETTINGS, formatTick, formatTime, heikinAshi, loadSettings, saveSettings, BAR_STYLES, type BarStyle, type ChartSettings } from "./settings";
+import { DEFAULT_SETTINGS, normalizeSettings, formatTick, formatTime, heikinAshi, loadSettings, saveSettings, BAR_STYLES, type BarStyle, type ChartSettings } from "./settings";
 import BottomBar, { type RangeKey } from "./BottomBar";
 import ChartSettingsDialog from "./ChartSettingsDialog";
 import GoToDate from "./GoToDate";
-import { Countdown, type BlockClock } from "./countdown";
+import { countdownText, type BlockClock } from "./countdown";
+import { ValueLabels, type ValueLabel } from "./valueLabels";
 import { useLayout, type LayoutDoc } from "./useLayout";
 import { INTERVAL_MS, useDatafeed } from "./useDatafeed";
 import { localChartStorage } from "./localStorage";
@@ -119,7 +121,7 @@ function themeOptions(t: CanvasColors) {
 }
 function mainOptions(s: ChartSettings, base: number) {
   const up = s.upColor, down = s.downColor;
-  const common = { priceLineVisible: s.lastPriceLine };
+  const common = { priceLineVisible: s.lastPriceLine, lastValueVisible: false };
   switch (mainKind(s.barStyle)) {
     case "bar": return { ...common, upColor: up, downColor: down, thinBars: false };
     case "line": return { ...common, color: up, lineWidth: 2 as const };
@@ -198,7 +200,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   const chart = useRef<IChartApi | null>(null);
   const series = useRef<ISeriesApi<SeriesType> | null>(null);
   const mainStyle = useRef<BarStyle>("candles");
-  const countdown = useRef<Countdown | null>(null);
+  const priceLabels = useRef<ValueLabels | null>(null);
+  const colorsRef = useRef<CanvasColors | null>(null);
   const haRef = useRef<{ open: number; high: number; low: number; close: number }[]>([]);
   const [mainRev, setMainRev] = useState(0);
   const [settings, setSettingsState] = useState<ChartSettings>(loadSettings);
@@ -281,7 +284,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   }, []);
   const toVolC = useCallback((c: Bar) => {
     const up = c.close >= c.open, s = settingsRef.current;
-    return { time: Math.floor(c.time / 1000) as UTCTimestamp, value: c.volume ?? 0, color: alpha(up ? s.upColor : s.downColor, 0.45) };
+    return { time: Math.floor(c.time / 1000) as UTCTimestamp, value: c.volume ?? 0, color: alpha(up ? s.upColor : s.downColor, 0.5) };
   }, []);
   const intervalMsRef = useRef(IV_MS[interval] ?? 900e3);
   intervalMsRef.current = IV_MS[interval] ?? 900e3;
@@ -372,7 +375,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 4 },
       crosshair: { mode: CrosshairMode.Normal },
     });
-    c.applyOptions(themeOptions(canvasColors(el.current)));
+    colorsRef.current = canvasColors(el.current);
+    c.applyOptions(themeOptions(colorsRef.current));
     mainStyle.current = settingsRef.current.barStyle;
     const s = createMain(c, mainStyle.current);
     s.applyOptions(mainOptions(settingsRef.current, 0) as any);
@@ -380,18 +384,49 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     const v = c.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "", lastValueVisible: false, priceLineVisible: false });
     v.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
     chart.current = c; series.current = s; vol.current = v;
-    renderer.current = new IndicatorRenderer(c);
+    const background = () => colorsRef.current?.bg ?? "#151b23";
+    renderer.current = new IndicatorRenderer(c, background);
     bindMain.current = (main: ISeriesApi<SeriesType>) => {
       drawCtl.current?.destroy();
-      if (countdown.current) { try { series.current?.detachPrimitive(countdown.current); } catch {} }
+      if (priceLabels.current) { try { series.current?.detachPrimitive(priceLabels.current); } catch {} }
       drawCtl.current = makeController(c, main);
-      countdown.current = new Countdown({
-        mode: () => settingsRef.current.countdown,
-        bar: () => { const cs = candlesRef.current, l = cs[cs.length - 1]; return l && !isClosed(l, true) ? { end: l.time + intervalMsRef.current, close: l.close, up: l.close >= l.open } : null; },
-        colors: () => ({ up: settingsRef.current.upColor, down: settingsRef.current.downColor }),
-        block: () => blockRef.current,
+      priceLabels.current = new ValueLabels({
+        labels: () => [...mainLabels(main), ...(renderer.current?.labelsFor(0) ?? [])],
+        background,
+        ticking: true,
       });
-      main.attachPrimitive(countdown.current);
+      main.attachPrimitive(priceLabels.current);
+    };
+    type Point = { time: number; open?: number; close?: number; value?: number };
+    const lastPoint = (main: ISeriesApi<SeriesType>) => main.dataByIndex(Number.MAX_SAFE_INTEGER, MismatchDirection.NearestLeft) as Point | null;
+    const visiblePoint = (main: ISeriesApi<SeriesType>) => {
+      const r = c.timeScale().getVisibleLogicalRange();
+      return r ? main.dataByIndex(Math.floor(r.to), MismatchDirection.NearestLeft) as Point | null : null;
+    };
+    const viewEnd = () => {
+      const main = series.current, last = main && lastPoint(main), at = main && visiblePoint(main);
+      return last && at ? { timeMs: at.time * 1000, latest: at.time >= last.time } : null;
+    };
+    renderer.current.setViewEnd(viewEnd);
+    const pointLabel = (main: ISeriesApi<SeriesType>, d: Point | null): ValueLabel | null => {
+      const v = d?.close ?? d?.value;
+      if (!d || v === undefined || !Number.isFinite(v)) return null;
+      const y = main.priceToCoordinate(v);
+      if (y === null) return null;
+      const st = settingsRef.current, kind = mainKind(st.barStyle), cs = candlesRef.current;
+      const up = kind === "candle" || kind === "bar" ? v >= (d.open ?? v) : kind === "baseline" ? v >= (cs[0]?.close ?? v) : true;
+      return { y, text: main.priceFormatter().format(v), color: up ? st.upColor : st.downColor };
+    };
+    const mainLabels = (main: ISeriesApi<SeriesType>): ValueLabel[] => {
+      const last = lastPoint(main), at = visiblePoint(main), out: ValueLabel[] = [];
+      const now = pointLabel(main, last);
+      if (now) {
+        const st = settingsRef.current, cs = candlesRef.current, l = cs[cs.length - 1];
+        const sub = st.countdown !== "off" && l && !isClosed(l, true) ? countdownText(l.time + intervalMsRef.current - Date.now(), st.countdown, blockRef.current) : undefined;
+        out.push({ ...now, filled: true, fixed: true, sub });
+      }
+      if (last && at && at.time < last.time) { const back = pointLabel(main, at); if (back) out.push(back); }
+      return out;
     };
     const makeController = (cc: IChartApi, main: ISeriesApi<SeriesType>) => new DrawingController({
       chart: cc, series: main as ISeriesApi<"Candlestick">, el: el.current!,
@@ -434,6 +469,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
         measureLabel: () => drawCtl.current?.layer.lastMeasureLabel ?? null,
         measureAxes: () => drawCtl.current?.layer.axisState() ?? null,
         barTimes: () => barsRef.current.times,
+        axisLabels: () => priceLabels.current?.last ?? [],
         colors: () => { const o = c.options(); return { grid: o.grid.vertLines.color, text: o.layout.textColor, border: o.rightPriceScale.borderColor }; },
         indicatorSeries: () => c.panes().flatMap((p, pane) => p.getSeries().filter((x) => x !== series.current && x !== v)
           .map((x) => ({ pane, times: x.data().filter((d: any) => d.value !== undefined).map((d: any) => d.time as number) }))),
@@ -444,7 +480,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       c.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
       c.unsubscribeCrosshairMove(onMove);
       renderer.current?.destroy();
-      drawCtl.current?.destroy(); drawCtl.current = null; countdown.current = null;
+      drawCtl.current?.destroy(); drawCtl.current = null; priceLabels.current = null;
       c.remove();
       chart.current = null; series.current = null; vol.current = null; renderer.current = null; markers.current = null;
       keyRef.current = ""; lastTimeRef.current = 0; firstTimeRef.current = 0;
@@ -506,7 +542,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       const fmt = old.options().priceFormat;
       bindMain.current = bindMain.current;
       drawCtl.current?.destroy(); drawCtl.current = null;
-      if (countdown.current) { try { old.detachPrimitive(countdown.current); } catch {} countdown.current = null; }
+      if (priceLabels.current) { try { old.detachPrimitive(priceLabels.current); } catch {} priceLabels.current = null; }
       markers.current = null;
       c.removeSeries(old);
       const s = createMain(c, settings.barStyle);
@@ -533,7 +569,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
 
   useEffect(() => {
     if (!el.current || !chart.current) return;
-    chart.current.applyOptions(themeOptions(canvasColors(el.current)));
+    colorsRef.current = canvasColors(el.current);
+    chart.current.applyOptions(themeOptions(colorsRef.current));
     drawCtl.current?.refresh();
   }, [resolvedTheme, documentTheme]);
 
@@ -605,7 +642,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     indicators: ind.instances.map(({ id: _id, ...rest }) => rest),
   }), [interval, settings, volState, ind.instances]);
   useLayout(storage, layoutDoc, (doc) => {
-    if (doc.settings) setSettings({ ...DEFAULT_SETTINGS, ...doc.settings, status: { ...DEFAULT_SETTINGS.status, ...(doc.settings.status ?? {}) } });
+    if (doc.settings) setSettings(normalizeSettings(doc.settings));
     if (Array.isArray(doc.indicators)) ind.replaceAll(doc.indicators.map((i) => ({ ...i, id: "" })));
     if (doc.volume === "0" || doc.volume === "1" || doc.volume === "x") setVolState(doc.volume);
     if (doc.interval && doc.interval !== interval) onIntervalRef.current?.(doc.interval);
