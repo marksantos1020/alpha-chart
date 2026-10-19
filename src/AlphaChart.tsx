@@ -31,7 +31,8 @@ import { useIndicators, type IndicatorEvents } from "./indicators/useIndicators"
 import { formatValue, indexAt, legendTitle, plotColorAt, precisionFor, priceFormatFor } from "./indicators/format";
 import type { IndicatorInstance, PlotFrame } from "./indicators/types";
 import IndicatorPicker from "./indicators/IndicatorPicker";
-import IndicatorRow, { LoadingDots, type RowValue } from "./indicators/IndicatorRow";
+import IndicatorRow, { ContextMenu, IndicatorMenuItems, LoadingDots, type RowValue } from "./indicators/IndicatorRow";
+import { SelectionMarks } from "./selection";
 import SettingsDialog from "./indicators/SettingsDialog";
 import TemplatesMenu from "./indicators/TemplatesMenu";
 import { DrawingController, type Bars } from "./drawings/controller";
@@ -269,6 +270,13 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   drawRef.current = draw;
   const [drawEdit, setDrawEdit] = useState<{ id: string; tab: "style" | "text" | "coords"; before: Drawing[] } | null>(null);
   const [drawMenu, setDrawMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [selected, setSelectedState] = useState<string | null>(null);
+  const selRef = useRef<string | null>(null);
+  const [seriesMenu, setSeriesMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const marks = useRef<{ prim: SelectionMarks; host: ISeriesApi<SeriesType> }[]>([]);
+  const hoverSel = useRef<string | null>(null);
+  const menuOpen = useRef(false);
+  menuOpen.current = !!seriesMenu || !!drawMenu;
   const barsRef = useRef<Bars>({ times: [], open: [], high: [], low: [], close: [], volume: [] });
   const barsFor = useRef<Bar[] | null>(null);
   if (barsFor.current !== candles) {
@@ -427,6 +435,47 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     if (it) renderer.current?.tail(it, times);
   };
 
+  const lastLogical = useCallback((): number | null => {
+    const c = chart.current, s = series.current;
+    if (!c || !s) return null;
+    const d = s.dataByIndex(Number.MAX_SAFE_INTEGER, MismatchDirection.NearestLeft) as { time: Time } | null;
+    if (!d) return null;
+    const x = c.timeScale().timeToCoordinate(d.time);
+    const l = x === null ? null : c.timeScale().coordinateToLogical(x);
+    return l === null ? null : Math.round(l);
+  }, []);
+  const applyMarks = useCallback(() => {
+    for (const m of marks.current) { try { m.host.detachPrimitive(m.prim); } catch {} }
+    marks.current = [];
+    const sel = selRef.current;
+    if (!sel) return;
+    const hosts = sel === "__main" ? [series.current] : sel === "__volume" ? [vol.current] : renderer.current?.seriesOf(sel) ?? [];
+    for (const host of hosts) {
+      if (!host) continue;
+      const prim = new SelectionMarks({ anchor: lastLogical, background: () => colorsRef.current?.bg ?? "#151b23" });
+      host.attachPrimitive(prim);
+      marks.current.push({ prim, host: host as ISeriesApi<SeriesType> });
+    }
+    priceLabels.current?.update();
+  }, [lastLogical]);
+  const select = useCallback((id: string | null) => {
+    if (id && drawRef.current.selRef.current) drawRef.current.select(null);
+    if (selRef.current === id) return;
+    selRef.current = id;
+    setSelectedState(id);
+    renderer.current?.setSelected(id);
+    applyMarks();
+  }, [applyMarks]);
+  const selectRef = useRef(select); selectRef.current = select;
+  const selectableOf = (api: ISeriesApi<SeriesType> | undefined): string | null => {
+    if (!api) return null;
+    if (api === series.current) return "__main";
+    if (api === vol.current) return "__volume";
+    const id = renderer.current?.itemOf(api) ?? null;
+    return id === "__strategy" ? null : id;
+  };
+  const selectableRef = useRef(selectableOf); selectableRef.current = selectableOf;
+
   useEffect(() => {
     if (!el.current) return;
     const c = createChart(el.current, {
@@ -439,6 +488,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       },
       timeScale: { timeVisible: true, secondsVisible: false, rightOffset: 4 },
       crosshair: { mode: CrosshairMode.Normal },
+      hoveredSeriesOnTop: false,
     });
     colorsRef.current = canvasColors(el.current);
     c.applyOptions(themeOptions(colorsRef.current));
@@ -452,6 +502,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     const background = () => colorsRef.current?.bg ?? "#151b23";
     renderer.current = new IndicatorRenderer(c, background);
     renderer.current.setFront(() => series.current);
+    renderer.current.setAfterBuild(applyMarks);
+    renderer.current.setSelected(selRef.current);
     renderer.current.bringToFront();
     bindMain.current = (main: ISeriesApi<SeriesType>) => {
       drawCtl.current?.destroy();
@@ -498,9 +550,9 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       if (now) {
         const st = settingsRef.current, cs = candlesRef.current, l = cs[cs.length - 1];
         const sub = st.countdown !== "off" && l && !isClosed(l, true) ? countdownText(l.time + intervalMsRef.current - Date.now(), st.countdown, blockRef.current) : undefined;
-        out.push({ ...now, filled: true, fixed: true, sub });
+        out.push({ ...now, filled: true, fixed: true, sub, mark: selRef.current === "__main" });
       }
-      if (last && at && at.time < last.time) { const back = pointLabel(main, at); if (back) out.push(back); }
+      if (last && at && at.time < last.time) { const back = pointLabel(main, at); if (back) out.push({ ...back, mark: selRef.current === "__main" }); }
       return out;
     };
     const makeController = (cc: IChartApi, main: ISeriesApi<SeriesType>) => new DrawingController({
@@ -522,7 +574,31 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       if (info && info.barsBefore < 100) needOlder.current?.();
     };
     c.timeScale().subscribeVisibleLogicalRangeChange(onRange);
+    const cursorTool = () => drawRef.current.toolRef.current === "cursor";
+    const onClick = (p: MouseEventParams<Time>) => {
+      if (!cursorTool() || drawRef.current.selRef.current) return;
+      selectRef.current(selectableRef.current(p.hoveredSeries as ISeriesApi<SeriesType> | undefined));
+    };
+    const onDbl = (p: MouseEventParams<Time>) => {
+      if (!cursorTool()) return;
+      const id = selectableRef.current(p.hoveredSeries as ISeriesApi<SeriesType> | undefined);
+      if (id === "__main") setSettingsOpen(true);
+      else if (id && id !== "__volume") setEditing(id);
+    };
+    const host = el.current;
+    const onContext = (e: MouseEvent) => {
+      const id = hoverSel.current;
+      if (!id || id === "__main" || !cursorTool()) return;
+      e.preventDefault();
+      selectRef.current(id);
+      setSeriesMenu({ id, x: e.clientX, y: e.clientY });
+    };
+    c.subscribeClick(onClick);
+    c.subscribeDblClick(onDbl);
+    host.addEventListener("contextmenu", onContext);
     const onMove = (p: MouseEventParams<Time>) => {
+      const hovered = p.point && cursorTool() ? selectableRef.current(p.hoveredSeries as ISeriesApi<SeriesType> | undefined) : null;
+      if (hovered !== hoverSel.current) { hoverSel.current = hovered; host.classList.toggle("series-hover", !!hovered); }
       if (p.time !== undefined) { const t = (p.time as number) * 1000; setHover((h) => (h.kind === "time" && h.t === t ? h : { kind: "time", t })); return; }
       const none = !!p.point && p.logical !== undefined && (p.logical as number) < 0;
       setHover((h) => (none ? (h.kind === "none" ? h : { kind: "none" }) : h.kind === "last" ? h : { kind: "last" }));
@@ -540,6 +616,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
         drawings: () => drawRef.current.ref.current,
         drawingPx: () => drawRef.current.ref.current.map((d) => d.anchors.map((a) => drawCtl.current?.layer.toPx(a))),
         selectedDrawing: () => drawRef.current.selRef.current,
+        selected: () => selRef.current,
+        selectionPoints: () => marks.current.map((m) => m.prim.points()),
         measure: () => drawCtl.current?.measureState() ?? null,
         measureLabel: () => drawCtl.current?.layer.lastMeasureLabel ?? null,
         measureAxes: () => drawCtl.current?.layer.axisState() ?? null,
@@ -555,6 +633,10 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       ro.disconnect();
       c.timeScale().unsubscribeVisibleLogicalRangeChange(onRange);
       c.unsubscribeCrosshairMove(onMove);
+      c.unsubscribeClick(onClick);
+      c.unsubscribeDblClick(onDbl);
+      host.removeEventListener("contextmenu", onContext);
+      marks.current = [];
       renderer.current?.destroy();
       drawCtl.current?.destroy(); drawCtl.current = null; priceLabels.current = null;
       c.remove();
@@ -630,6 +712,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       renderer.current?.bringToFront();
       mainStyle.current = settings.barStyle;
       bindMain.current(s);
+      applyMarks();
       const cs = candlesRef.current;
       if (cs.length) s.setData(mainData(cs) as any);
       if (range) c.timeScale().setVisibleLogicalRange(range);
@@ -713,6 +796,20 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   }, [frame, ind.instances, ind.rev, ind.frameFor, symbol, interval, mainRev]);
 
   useEffect(() => { drawCtl.current?.refresh(); }, [draw.items, draw.selected, draw.prefs, draw.tool]);
+  useEffect(() => { if (draw.selected && selRef.current) select(null); }, [draw.selected, select]);
+  useEffect(() => {
+    const sel = selRef.current;
+    if (!sel || sel === "__main") return;
+    if (sel === "__volume" ? !volVisible : !ind.instances.some((i) => i.id === sel && i.visible)) select(null);
+  }, [ind.instances, volVisible, select]);
+  const removeSelected = useRef<() => boolean>(() => false);
+  removeSelected.current = () => {
+    const sel = selRef.current;
+    if (!sel || sel === "__main") return false;
+    if (sel === "__volume") setVolState("x"); else ind.remove(sel);
+    select(null);
+    return true;
+  };
 
   const typedRef = useRef("");
   const onIntervalRef = useRef(onInterval); onIntervalRef.current = onInterval;
@@ -740,6 +837,10 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable || t.closest(".cm-editor"))) return;
       if (e.key === "/" && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); setPicker(true); return; }
+      if (selRef.current && !typedRef.current && !t?.closest(".modal") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === "Escape") { if (!menuOpen.current) selectRef.current(null); return; }
+        if ((e.key === "Delete" || e.key === "Backspace") && removeSelected.current()) { e.preventDefault(); return; }
+      }
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
         const k = e.key.toLowerCase();
         const st = settingsRef.current;
@@ -814,6 +915,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     onMove: (d: -1 | 1) => ind.move(r.inst.id, d),
     onReset: () => ind.update(r.inst.id, { inputs: {}, style: {}, overlay: null }),
     onSource: onIndicatorSource ? () => onIndicatorSource(r.inst.libraryId) : undefined,
+    selected: selected === r.inst.id,
+    onSelect: () => select(r.inst.id),
   });
 
   const show = blank ? undefined : candleAt;
@@ -870,8 +973,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
             {!collapsed && (
               <>
                 {volState !== "x" && (
-                  <div className={`ind-row ${volVisible ? "" : "hidden"}`}>
-                    <span className="ind-title">Vol{volumeUnit && <> <span className="ind-args">{volumeUnit}</span></>}</span>
+                  <div className={`ind-row ${volVisible ? "" : "hidden"} ${selected === "__volume" ? "selected" : ""}`}>
+                    <span className="ind-title" onClick={() => volVisible && select("__volume")}>Vol{volumeUnit && <> <span className="ind-args">{volumeUnit}</span></>}</span>
                     {volVisible && settings.status.volume && (show
                       ? <span className="ind-val" style={{ color: show.close >= show.open ? settings.upColor : settings.downColor }}>{fmtNum(show.volume ?? NaN, 2)}</span>
                       : <span className="ind-val muted">{none}</span>)}
@@ -915,6 +1018,23 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       {picker && <IndicatorPicker engine={engine} onAdd={(id) => (id === "__volume" ? setVolState("1") : ind.add(id))} onClose={() => { setPicker(false); setPickerCat(undefined); }}
                                   onAddStrategy={onAddStrategy} initialCategory={pickerCat}
                                   count={ind.instances.length} max={ind.max} volumeOnChart={volState !== "x"} />}
+      {seriesMenu && (() => {
+        const close = () => setSeriesMenu(null);
+        if (seriesMenu.id === "__volume") {
+          return (
+            <ContextMenu x={seriesMenu.x} y={seriesMenu.y} onClose={close}>
+              {(act) => <>
+                <button onClick={act(() => setVolState("0"))}>Hide</button>
+                <hr />
+                <button className="danger" onClick={act(() => setVolState("x"))}>Remove</button>
+              </>}
+            </ContextMenu>
+          );
+        }
+        const r = rows.find((x) => x.inst.id === seriesMenu.id);
+        if (!r) return null;
+        return <ContextMenu x={seriesMenu.x} y={seriesMenu.y} onClose={close}>{(act) => <IndicatorMenuItems p={rowProps(r)} act={act} />}</ContextMenu>;
+      })()}
       {drawMenu && (() => {
         const d = draw.items.find((x) => x.id === drawMenu.id);
         if (!d) return null;

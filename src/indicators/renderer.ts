@@ -76,12 +76,25 @@ export class IndicatorRenderer {
   private paneLabels: { prim: ValueLabels; host: ISeriesApi<SeriesType> }[] = [];
   private viewEnd: () => ViewEnd | null = () => null;
   private front: () => ISeriesApi<SeriesType> | null = () => null;
+  private afterBuild: () => void = () => undefined;
+  private selected: string | null = null;
 
   constructor(private chart: IChartApi, private background: () => string = () => "#151b23") {}
 
   setCandleDirection(fn: (timeMs: number) => boolean | undefined) { this.candleUp = fn; }
   setViewEnd(fn: () => ViewEnd | null) { this.viewEnd = fn; }
   setFront(fn: () => ISeriesApi<SeriesType> | null) { this.front = fn; }
+  setAfterBuild(fn: () => void) { this.afterBuild = fn; }
+  setSelected(id: string | null) { this.selected = id; }
+
+  itemOf(api: ISeriesApi<SeriesType>): string | null {
+    for (const [id, h] of this.handles) if (h.plots.some((p) => p.api === api)) return id;
+    return null;
+  }
+
+  seriesOf(id: string): ISeriesApi<SeriesType>[] {
+    return (this.handles.get(id)?.plots ?? []).filter((p) => p.api.options().visible).map((p) => p.api);
+  }
 
   bringToFront() {
     const s = this.front();
@@ -164,6 +177,7 @@ export class IndicatorRenderer {
     const panes = this.chart.panes();
     panes.forEach((p, i) => p.setStretchFactor(i === 0 ? 3 : 1));
     this.bringToFront();
+    this.afterBuild();
   }
 
   private addSeries(p: PlotFrame, pane: number): ISeriesApi<SeriesType> {
@@ -279,7 +293,7 @@ export class IndicatorRenderer {
   labelsFor(pane: number): ValueLabel[] {
     const out: ValueLabel[] = [];
     const end = this.viewEnd(), filled = !end || end.latest;
-    for (const h of this.handles.values()) {
+    for (const [id, h] of this.handles) {
       for (const ph of h.plots) {
         if (ph.pane !== pane || !ph.label) continue;
         const v = ph.plot.values, t = ph.plot.times;
@@ -290,7 +304,7 @@ export class IndicatorRenderer {
         const y = ph.api.priceToCoordinate(v[i]);
         if (y === null) continue;
         const color = ph.colorAt?.(i, v[i]) || ph.color || "#787B86";
-        out.push({ y, text: ph.api.priceFormatter().format(v[i]), color, filled });
+        out.push({ y, text: ph.api.priceFormatter().format(v[i]), color, filled, mark: id === this.selected });
       }
     }
     return out;

@@ -1,7 +1,21 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LegendIcons } from "../icons";
 
 export interface RowValue { text: string; color: string }
+
+export interface IndicatorMenuActions {
+  visible: boolean;
+  overlay: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onToggle: () => void;
+  onSettings: () => void;
+  onRemove: () => void;
+  onDuplicate: () => void;
+  onMovePane: () => void;
+  onMove: (dir: -1 | 1) => void;
+  onReset: () => void;
+}
 
 interface Props {
   name: string;
@@ -24,6 +38,41 @@ interface Props {
   onInterval?: boolean;
   dragId?: string;
   onDropOn?: (draggedId: string) => void;
+  selected?: boolean;
+  onSelect?: () => void;
+}
+
+export function IndicatorMenuItems({ p, act }: { p: IndicatorMenuActions; act: (fn: () => void) => () => void }) {
+  return (
+    <>
+      <button onClick={act(p.onSettings)}>Settings…</button>
+      <button onClick={act(p.onToggle)}>{p.visible ? "Hide" : "Show"}</button>
+      <button onClick={act(p.onMovePane)}>{p.overlay ? "Move to new pane below" : "Move to price pane"}</button>
+      {p.canMoveUp && <button onClick={act(() => p.onMove(-1))}>Move up</button>}
+      {p.canMoveDown && <button onClick={act(() => p.onMove(1))}>Move down</button>}
+      <button onClick={act(p.onDuplicate)}>Duplicate</button>
+      <button onClick={act(p.onReset)}>Reset settings</button>
+      <hr />
+      <button className="danger" onClick={act(p.onRemove)}>Remove</button>
+    </>
+  );
+}
+
+export function ContextMenu({ x, y, onClose, children }: { x: number; y: number; onClose: () => void; children: (act: (fn: () => void) => () => void) => ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose); close.current = onClose;
+  useEffect(() => {
+    const down = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) close.current(); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close.current(); };
+    window.addEventListener("mousedown", down); window.addEventListener("keydown", esc);
+    return () => { window.removeEventListener("mousedown", down); window.removeEventListener("keydown", esc); };
+  }, []);
+  const act = (fn: () => void) => () => { onClose(); fn(); };
+  return (
+    <div ref={ref} className="ind-menu draw-menu" style={{ position: "fixed", left: Math.min(x, window.innerWidth - 220), top: Math.min(y, window.innerHeight - 340) }} role="menu">
+      {children(act)}
+    </div>
+  );
 }
 
 export function LoadingDots() {
@@ -42,13 +91,13 @@ export default function IndicatorRow(p: Props) {
   const act = (fn: () => void) => () => { setMenu(false); fn(); };
 
   return (
-    <div ref={ref} className={`ind-row ${p.visible && p.onInterval !== false ? "" : "hidden"} ${menu ? "menu-open" : ""}`}
+    <div ref={ref} className={`ind-row ${p.visible && p.onInterval !== false ? "" : "hidden"} ${menu ? "menu-open" : ""} ${p.selected ? "selected" : ""}`}
          draggable={!!p.dragId}
          onDragStart={(e) => { if (p.dragId) { e.dataTransfer.setData("text/x-indicator", p.dragId); e.dataTransfer.effectAllowed = "move"; } }}
          onDragOver={(e) => { if (p.onDropOn && e.dataTransfer.types.includes("text/x-indicator")) { e.preventDefault(); e.currentTarget.classList.add("drop"); } }}
          onDragLeave={(e) => e.currentTarget.classList.remove("drop")}
          onDrop={(e) => { e.currentTarget.classList.remove("drop"); const id = e.dataTransfer.getData("text/x-indicator"); if (id && id !== p.dragId) p.onDropOn?.(id); }}>
-      <span className="ind-title" onDoubleClick={p.onSettings} title="Double-click for settings · drag to reorder">
+      <span className="ind-title" onClick={p.onSelect} onDoubleClick={p.onSettings} title="Double-click for settings · drag to reorder">
         {p.name}{p.args && <span className="ind-args"> {p.args}</span>}
       </span>
       {p.error ? <span className="ind-error" title={p.error}>error: {p.error}</span>
@@ -64,15 +113,7 @@ export default function IndicatorRow(p: Props) {
       </span>
       {menu && (
         <div className="ind-menu" role="menu">
-          <button onClick={act(p.onSettings)}>Settings…</button>
-          <button onClick={act(p.onToggle)}>{p.visible ? "Hide" : "Show"}</button>
-          <button onClick={act(p.onMovePane)}>{p.overlay ? "Move to new pane below" : "Move to price pane"}</button>
-          {p.canMoveUp && <button onClick={act(() => p.onMove(-1))}>Move up</button>}
-          {p.canMoveDown && <button onClick={act(() => p.onMove(1))}>Move down</button>}
-          <button onClick={act(p.onDuplicate)}>Duplicate</button>
-          <button onClick={act(p.onReset)}>Reset settings</button>
-          <hr />
-          <button className="danger" onClick={act(p.onRemove)}>Remove</button>
+          <IndicatorMenuItems p={p} act={act} />
         </div>
       )}
     </div>

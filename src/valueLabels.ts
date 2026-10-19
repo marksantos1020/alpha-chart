@@ -11,6 +11,7 @@ export interface ValueLabel {
   filled?: boolean;
   fixed?: boolean;
   sub?: string;
+  mark?: boolean;
 }
 
 export interface ValueLabelsSource {
@@ -19,7 +20,7 @@ export interface ValueLabelsSource {
   ticking?: boolean;
 }
 
-const TEXT_X = 10, BOX_X = 0, PAD_Y = 3, GAP = 1, RADIUS = 2;
+const TEXT_X = 10, BOX_X = 0, PAD_Y = 3, GAP = 1, RADIUS = 2, MARK_W = 3, MARK_GAP = 6;
 
 export function labelHeight(fontSize: number, twoLines: boolean): number {
   return twoLines ? fontSize * 2 + PAD_Y * 2 + 2 : fontSize + PAD_Y * 2;
@@ -93,15 +94,18 @@ export class ValueLabels implements ISeriesPrimitive<Time> {
       const items = labels.map((l) => ({ y: l.y, h: labelHeight(fs, !!l.sub), fixed: l.fixed }));
       const ys = layoutLabels(items, mediaSize.height);
       const bg = this.src.background();
-      const right = mediaSize.width - 2;
+      const full = mediaSize.width - 2;
       ctx.font = font;
       ctx.textBaseline = "middle";
       ctx.textAlign = "left";
       this.last = [];
       const rank = (l: ValueLabel) => (l.fixed ? 2 : l.filled ? 1 : 0);
       const order = labels.map((_, i) => i).sort((i, j) => rank(labels[i]) - rank(labels[j]));
+      const marked = labels.some((l) => l.mark);
       for (const i of order) {
         const l = labels[i], h = items[i].h, cy = ys[i], top = Math.round(cy - h / 2);
+        const right = marked ? full - MARK_GAP : full;
+        if (l.mark) { ctx.fillStyle = l.color; roundRect(ctx, full + 1 - MARK_W, top + 1, MARK_W, h - 2, 1.5); ctx.fill(); }
         ctx.strokeStyle = l.color; ctx.lineWidth = 1;
         if (l.filled) {
           ctx.fillStyle = l.color;

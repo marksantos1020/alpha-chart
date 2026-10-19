@@ -4,6 +4,7 @@ import {
   snapAngle, snapTime, timeToLogical, type Pt, type Timeline,
 } from "../src/drawings/geometry";
 import { defaultStyle, type Drawing } from "../src/drawings/types";
+import { selectionIndices, selectionStep } from "../src/selection";
 
 let n = 0;
 const ok = (name: string, fn: () => void) => { fn(); n++; console.log(`ok  ${name}`); };
@@ -101,6 +102,15 @@ ok("measure label: preferred side, flips at the pane edge, stays inside when nei
   r = placeMeasureLabel({ x: 760, y: 300 }, { x: 799, y: 250 }, size, pane, true);
   close(r.x, 800 - 160 - 4);
   assert.ok(r.y >= 4 && r.y + r.h <= 396);
+});
+
+ok("selection circles: about 130 px apart, anchored on the last bar, only inside the view", () => {
+  assert.equal(selectionStep(12.5), 10);
+  assert.equal(selectionStep(200), 1);
+  assert.equal(selectionStep(0), 1);
+  assert.deepEqual(selectionIndices(100, 60, 120, 10), [100, 90, 80, 70, 60]);
+  assert.deepEqual(selectionIndices(100, 40, 75, 10), [70, 60, 50, 40]);
+  assert.deepEqual(selectionIndices(100, 101, 120, 10), []);
 });
 
 console.log(`GEOMETRY OK (${n})`);
