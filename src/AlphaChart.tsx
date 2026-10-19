@@ -6,12 +6,14 @@ import {
   CandlestickSeries,
   ColorType,
   LineSeries,
+  LineType,
   MismatchDirection,
   PriceScaleMode,
   CrosshairMode,
   HistogramSeries,
   createChart,
   createSeriesMarkers,
+  type AutoscaleInfo,
   type IChartApi,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
@@ -39,7 +41,7 @@ import DrawingSettings from "./drawings/DrawingSettings";
 import DrawingMenu from "./drawings/DrawingMenu";
 import type { Drawing } from "./drawings/types";
 import { setLabelZone } from "./drawings/layer";
-import { DEFAULT_SETTINGS, normalizeSettings, formatTick, formatTime, heikinAshi, loadSettings, saveSettings, BAR_STYLES, type BarStyle, type ChartSettings } from "./settings";
+import { DEFAULT_SETTINGS, normalizeSettings, formatTick, formatTime, heikinAshi, loadSettings, saveSettings, type BarStyle, type ChartSettings } from "./settings";
 import BottomBar, { type RangeKey } from "./BottomBar";
 import ChartSettingsDialog from "./ChartSettingsDialog";
 import GoToDate from "./GoToDate";
@@ -48,6 +50,8 @@ import { ValueLabels, type ValueLabel } from "./valueLabels";
 import { useLayout, type LayoutDoc } from "./useLayout";
 import { INTERVAL_MS, useDatafeed } from "./useDatafeed";
 import { localChartStorage } from "./localStorage";
+import { HlcArea } from "./hlcArea";
+import ChartTypeMenu from "./ChartTypeMenu";
 import { canvasColors, useDocumentTheme, useResolvedTheme, type CanvasColors, type ThemeMode } from "./theme";
 
 export interface AlphaChartProps {
@@ -88,13 +92,17 @@ export const INITIAL_BARS = 200;
 const IV_LABEL: Record<string, string> = { "1": "1m", "3": "3m", "5": "5m", "15": "15m", "30": "30m", "60": "1h", "120": "2h", "240": "4h", D: "1D", W: "1W" };
 const IV_MS = INTERVAL_MS;
 
-type MainKind = "candle" | "bar" | "line" | "area" | "baseline";
-function mainKind(style: BarStyle): MainKind {
-  return style === "bars" ? "bar" : style === "line" ? "line" : style === "area" ? "area" : style === "baseline" ? "baseline" : "candle";
-}
-function createMain(c: IChartApi, style: BarStyle): ISeriesApi<SeriesType> {
-  const base = { priceFormat: { type: "price" as const, precision: 6, minMove: 0.000001 } };
+type MainKind = "candle" | "bar" | "line" | "area" | "baseline" | "columns";
+const KIND: Record<BarStyle, MainKind> = {
+  bars: "bar", candles: "candle", hollow: "candle", heikin: "candle", highlow: "candle",
+  line: "line", linemarkers: "line", step: "line", hlcarea: "line", area: "area", baseline: "baseline", columns: "columns",
+};
+function mainKind(style: BarStyle): MainKind { return KIND[style] ?? "candle"; }
+type Autoscale = (original: () => AutoscaleInfo | null) => AutoscaleInfo | null;
+function createMain(c: IChartApi, style: BarStyle, autoscaleInfoProvider: Autoscale): ISeriesApi<SeriesType> {
+  const base = { priceFormat: { type: "price" as const, precision: 6, minMove: 0.000001 }, autoscaleInfoProvider };
   switch (mainKind(style)) {
+    case "columns": return c.addSeries(HistogramSeries, { ...base, base: 0 }) as ISeriesApi<SeriesType>;
     case "bar": return c.addSeries(BarSeries, base) as ISeriesApi<SeriesType>;
     case "line": return c.addSeries(LineSeries, base) as ISeriesApi<SeriesType>;
     case "area": return c.addSeries(AreaSeries, base) as ISeriesApi<SeriesType>;
@@ -119,16 +127,24 @@ function themeOptions(t: CanvasColors) {
     crosshair: { vertLine: line, horzLine: line },
   };
 }
+const HIGH_LOW = "#2962FF";
 function mainOptions(s: ChartSettings, base: number) {
   const up = s.upColor, down = s.downColor;
   const common = { priceLineVisible: s.lastPriceLine, lastValueVisible: false };
   switch (mainKind(s.barStyle)) {
     case "bar": return { ...common, upColor: up, downColor: down, thinBars: false };
-    case "line": return { ...common, color: up, lineWidth: 2 as const };
+    case "line": {
+      const hlc = s.barStyle === "hlcarea";
+      return { ...common, color: hlc ? "#868993" : up, lineWidth: (hlc ? 1 : 2) as 1 | 2, lineType: s.barStyle === "step" ? LineType.WithSteps : LineType.Simple,
+               pointMarkersVisible: s.barStyle === "linemarkers", pointMarkersRadius: 3 };
+    }
+    case "columns": return { ...common, color: up };
     case "area": return { ...common, lineColor: up, lineWidth: 2 as const, topColor: alpha(up, 0.35), bottomColor: alpha(up, 0.02) };
     case "baseline": return { ...common, baseValue: { type: "price" as const, price: base }, topLineColor: up, bottomLineColor: down,
                               topFillColor1: alpha(up, 0.28), topFillColor2: alpha(up, 0.05), bottomFillColor1: alpha(down, 0.05), bottomFillColor2: alpha(down, 0.28) };
     default: {
+      if (s.barStyle === "highlow") return { ...common, upColor: alpha(HIGH_LOW, 0.25), downColor: alpha(HIGH_LOW, 0.25), borderVisible: true,
+                                             borderUpColor: HIGH_LOW, borderDownColor: HIGH_LOW, wickVisible: false };
       const hollow = s.barStyle === "hollow";
       return { ...common, upColor: hollow ? "rgba(0,0,0,0)" : up, downColor: down, borderVisible: s.borders || hollow,
                borderUpColor: up, borderDownColor: down, wickVisible: s.wicks, wickUpColor: up, wickDownColor: down };
@@ -149,6 +165,9 @@ export function parseInterval(t: string): string | null {
 
 function toBar(c: Bar) {
   return { time: Math.floor(c.time / 1000) as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close };
+}
+function highLow(c: Bar) {
+  return { time: Math.floor(c.time / 1000) as UTCTimestamp, open: c.high, high: c.high, low: c.low, close: c.low };
 }
 
 const SHAPES: Record<string, SeriesMarker<Time>["shape"]> = { triangleUp: "arrowUp", triangleDown: "arrowDown", arrowUp: "arrowUp", arrowDown: "arrowDown", circle: "circle", square: "square", label: "circle" };
@@ -266,7 +285,9 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       haRef.current = heikinAshi(b.open, b.high, b.low, b.close);
       return haRef.current.map((h, i) => ({ time: Math.floor(cs[i].time / 1000) as UTCTimestamp, ...h }));
     }
+    if (st === "highlow") return cs.map(highLow);
     if (kind === "candle" || kind === "bar") return cs.map(toBar);
+    if (kind === "columns") return cs.map((c, i) => column(c, cs[i - 1]));
     return cs.map((c) => ({ time: Math.floor(c.time / 1000) as UTCTimestamp, value: c.close }));
   }, []);
   const mainPoint = useCallback((cs: Bar[]) => {
@@ -279,8 +300,38 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       ha.length = n - 1; ha.push(h);
       return { time, ...h };
     }
+    if (st === "highlow") return highLow(c);
     if (kind === "candle" || kind === "bar") return toBar(c);
+    if (kind === "columns") return column(c, cs[n - 2]);
     return { time, value: c.close };
+  }, []);
+  const column = (c: Bar, prev: Bar | undefined) => {
+    const s = settingsRef.current;
+    return { time: Math.floor(c.time / 1000) as UTCTimestamp, value: c.close, color: c.close >= (prev?.close ?? c.open) ? s.upColor : s.downColor };
+  };
+  const hlc = useRef<HlcArea | null>(null);
+  const syncHlc = useCallback(() => {
+    const s = series.current;
+    if (!s) return;
+    const st = settingsRef.current;
+    if (st.barStyle !== "hlcarea") {
+      if (hlc.current) { try { s.detachPrimitive(hlc.current); } catch {} hlc.current = null; }
+      return;
+    }
+    const b = barsRef.current;
+    const data = { times: b.times, high: b.high, low: b.low, close: b.close, up: st.upColor, down: st.downColor };
+    if (hlc.current) hlc.current.set(data);
+    else { hlc.current = new HlcArea(data); s.attachPrimitive(hlc.current); }
+  }, []);
+  const autoscale = useCallback<Autoscale>((original) => {
+    const st = settingsRef.current.barStyle;
+    if (st !== "columns" && st !== "hlcarea") return original();
+    const b = barsRef.current, lo = st === "columns" ? b.close : b.low, hi = st === "columns" ? b.close : b.high;
+    const r = chart.current?.timeScale().getVisibleLogicalRange();
+    if (!r || !lo.length) return original();
+    let min = Infinity, max = -Infinity;
+    for (let i = Math.max(0, Math.floor(r.from)); i <= Math.min(lo.length - 1, Math.ceil(r.to)); i++) { min = Math.min(min, lo[i]); max = Math.max(max, hi[i]); }
+    return min <= max ? { priceRange: { minValue: min, maxValue: max } } : original();
   }, []);
   const toVolC = useCallback((c: Bar) => {
     const up = c.close >= c.open, s = settingsRef.current;
@@ -390,7 +441,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     colorsRef.current = canvasColors(el.current);
     c.applyOptions(themeOptions(colorsRef.current));
     mainStyle.current = settingsRef.current.barStyle;
-    const s = createMain(c, mainStyle.current);
+    const s = createMain(c, mainStyle.current, autoscale);
     s.applyOptions(mainOptions(settingsRef.current, 0) as any);
     s.priceScale().applyOptions({ scaleMargins: { top: 0.06, bottom: 0.26 } });
     const v = c.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "", lastValueVisible: false, priceLineVisible: false });
@@ -409,7 +460,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       });
       main.attachPrimitive(priceLabels.current);
     };
-    type Point = { time: number; open?: number; close?: number; value?: number };
+    type Point = { time: number; open?: number; close?: number; value?: number; color?: string };
     const lastPoint = (main: ISeriesApi<SeriesType>) => main.dataByIndex(Number.MAX_SAFE_INTEGER, MismatchDirection.NearestLeft) as Point | null;
     const visiblePoint = (main: ISeriesApi<SeriesType>) => {
       const r = c.timeScale().getVisibleLogicalRange();
@@ -420,12 +471,20 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       return last && at ? { timeMs: at.time * 1000, latest: at.time >= last.time } : null;
     };
     renderer.current.setViewEnd(viewEnd);
-    const pointLabel = (main: ISeriesApi<SeriesType>, d: Point | null): ValueLabel | null => {
+    const realBar = (d: Point): Point => {
+      const times = barsRef.current.times, t = d.time * 1000;
+      let lo = 0, hi = times.length - 1;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (times[m] < t) lo = m + 1; else hi = m; }
+      return times[lo] === t ? { time: d.time, open: barsRef.current.open[lo], close: barsRef.current.close[lo] } : d;
+    };
+    const pointLabel = (main: ISeriesApi<SeriesType>, p: Point | null): ValueLabel | null => {
+      const st = settingsRef.current, kind = mainKind(st.barStyle), cs = candlesRef.current;
+      const d = p && st.barStyle === "highlow" ? realBar(p) : p;
       const v = d?.close ?? d?.value;
       if (!d || v === undefined || !Number.isFinite(v)) return null;
       const y = main.priceToCoordinate(v);
       if (y === null) return null;
-      const st = settingsRef.current, kind = mainKind(st.barStyle), cs = candlesRef.current;
+      if (kind === "columns" && d.color) return { y, text: main.priceFormatter().format(v), color: d.color };
       const up = kind === "candle" || kind === "bar" ? v >= (d.open ?? v) : kind === "baseline" ? v >= (cs[0]?.close ?? v) : true;
       return { y, text: main.priceFormatter().format(v), color: up ? st.upColor : st.downColor };
     };
@@ -545,6 +604,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     keyRef.current = key;
     lastTimeRef.current = lastTime;
     firstTimeRef.current = firstTime;
+    syncHlc();
   }, [candles, dataSeq, symbol, interval, syncAll, mainData, mainPoint, toVolC]);
 
   useEffect(() => {
@@ -557,8 +617,9 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       drawCtl.current?.destroy(); drawCtl.current = null;
       if (priceLabels.current) { try { old.detachPrimitive(priceLabels.current); } catch {} priceLabels.current = null; }
       markers.current = null;
+      if (hlc.current) { try { old.detachPrimitive(hlc.current); } catch {} hlc.current = null; }
       c.removeSeries(old);
-      const s = createMain(c, settings.barStyle);
+      const s = createMain(c, settings.barStyle, autoscale);
       s.applyOptions({ priceFormat: fmt } as any);
       s.priceScale().applyOptions({ scaleMargins: { top: 0.06, bottom: 0.26 } });
       series.current = s;
@@ -568,11 +629,12 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       if (cs.length) s.setData(mainData(cs) as any);
       if (range) c.timeScale().setVisibleLogicalRange(range);
       setMainRev((r) => r + 1);
-    } else if (settings.barStyle !== mainStyle.current) {
+    } else if (settings.barStyle !== mainStyle.current || mainKind(settings.barStyle) === "columns") {
       mainStyle.current = settings.barStyle;
       const cs = candlesRef.current;
       if (cs.length) old.setData(mainData(cs) as any);
     }
+    syncHlc();
     const cs = candlesRef.current;
     series.current!.applyOptions(mainOptions(settings, cs.length ? cs[0].close : 0) as any);
     if (cs.length && v) v.setData(cs.map(toVolC));
@@ -762,9 +824,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       <div className="chart-tools">
         {toolbar}
         <span className="tool-sep" />
-        <select className="bar-style" value={settings.barStyle} onChange={(e) => patchSettings({ barStyle: e.target.value as BarStyle })} title="Bar style" aria-label="Bar style">
-          {BAR_STYLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-        </select>
+        <ChartTypeMenu value={settings.barStyle} onChange={(barStyle) => patchSettings({ barStyle })} />
         {engine && <button className="btn tool" onClick={() => setPicker(true)} title="Indicators (/)">ƒx Indicators</button>}
         {engine && storage.templates && <TemplatesMenu store={storage.templates} instances={ind.instances} onApply={(list: IndicatorInstance[]) => ind.replaceAll(list)} />}
         <span className="tool-sep" />

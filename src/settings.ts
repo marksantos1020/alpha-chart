@@ -1,4 +1,4 @@
-export type BarStyle = "candles" | "hollow" | "bars" | "line" | "area" | "baseline" | "heikin";
+export type BarStyle = "bars" | "candles" | "hollow" | "line" | "linemarkers" | "step" | "area" | "hlcarea" | "baseline" | "columns" | "highlow" | "heikin";
 export type ScaleMode = "normal" | "log" | "percent" | "indexed";
 
 export interface ChartSettings {
@@ -40,6 +40,7 @@ export function normalizeSettings(raw: Partial<ChartSettings> | null | undefined
   if (s.upColor.toLowerCase() === OLD_DEFAULT_COLORS[0] && s.downColor.toLowerCase() === OLD_DEFAULT_COLORS[1]) {
     s.upColor = DEFAULT_SETTINGS.upColor; s.downColor = DEFAULT_SETTINGS.downColor;
   }
+  if (!BAR_STYLES.some(([k]) => k === s.barStyle)) s.barStyle = DEFAULT_SETTINGS.barStyle;
   if (s.precision !== "default" && !(Number.isInteger(s.precision) && s.precision >= 0 && s.precision <= MAX_PRECISION)) s.precision = "default";
   return s;
 }
@@ -49,10 +50,14 @@ export function loadSettings(): ChartSettings {
 }
 export function saveSettings(s: ChartSettings) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {} }
 
-export const BAR_STYLES: [BarStyle, string][] = [
-  ["candles", "Candles"], ["hollow", "Hollow candles"], ["bars", "Bars"], ["heikin", "Heikin Ashi"],
-  ["line", "Line"], ["area", "Area"], ["baseline", "Baseline"],
+export const BAR_STYLE_GROUPS: [BarStyle, string][][] = [
+  [["bars", "Bars"], ["candles", "Candles"], ["hollow", "Hollow candles"]],
+  [["line", "Line"], ["linemarkers", "Line with markers"], ["step", "Step line"]],
+  [["area", "Area"], ["hlcarea", "HLC area"], ["baseline", "Baseline"]],
+  [["columns", "Columns"], ["highlow", "High-low"]],
+  [["heikin", "Heikin Ashi"]],
 ];
+export const BAR_STYLES: [BarStyle, string][] = BAR_STYLE_GROUPS.flat();
 
 export const TIMEZONES: [string, string][] = [
   ["UTC", "UTC"], ["local", "Browser time zone"], ["America/New_York", "New York"], ["America/Chicago", "Chicago"],

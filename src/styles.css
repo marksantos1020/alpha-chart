@@ -19,6 +19,7 @@
   --backdrop: rgba(5, 8, 12, 0.55);
   --shadow: rgba(0, 0, 0, 0.45);
   --line-soft: rgba(43, 54, 68, 0.5);
+  --gap: #2a3340;
   --knob: #3a4553;
   --knob-hover: #4a5768;
   --chart-text: #8b98a8;
@@ -49,6 +50,7 @@
   --backdrop: rgba(19, 23, 34, 0.32);
   --shadow: rgba(19, 23, 34, 0.16);
   --line-soft: rgba(224, 227, 235, 0.9);
+  --gap: #e0e3eb;
   --knob: #e0e3eb;
   --knob-hover: #d1d4dc;
   --chart-text: #131722;
@@ -84,7 +86,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 18px 8px;
+  padding: 4px 10px;
+  min-height: 40px;
+  background: var(--bg);
 }
 .tabs { display: flex; gap: 2px; }
 .chart-tools .spacer { flex: 1; }
@@ -97,7 +101,7 @@
   color: var(--text);
 }
 .btn:hover { border-color: var(--accent); }
-.chart-wrap { flex: 1; min-height: 240px; position: relative; margin: 0 8px 8px 4px; min-width: 0; }
+.chart-wrap { flex: 1; min-height: 240px; position: relative; margin: 0; min-width: 0; background: var(--bg); }
 .chart-wrap .legend {
   position: absolute; top: 6px; left: 8px; z-index: 2;
   color: var(--muted); font-size: 12px; display: flex; gap: 12px;
@@ -190,8 +194,8 @@ kbd { background: var(--raised); border: 1px solid var(--border); border-radius:
 .picker .empty, .modal .empty { color: var(--muted); padding: 16px; font-size: 13px; }
 .ind-row.drop { outline: 1px dashed var(--blue); }
 .ind-row[draggable=true] .ind-title { cursor: grab; }
-.chart-body { flex: 1; display: flex; min-height: 0; min-width: 0; overflow: hidden; }
-.draw-toolbar { position: relative; width: 47px; flex: 0 0 47px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; margin-left: 0; border-right: 1px solid var(--border); }
+.chart-body { flex: 1; display: flex; gap: 4px; min-height: 0; min-width: 0; overflow: hidden; }
+.draw-toolbar { position: relative; width: 46px; flex: 0 0 46px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; margin-left: 0; padding-top: 4px; background: var(--bg); }
 .dt-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
 .dt-scroll::-webkit-scrollbar { display: none; }
 .dt-column { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 2px 0 8px 7px; }
@@ -224,7 +228,7 @@ kbd { background: var(--raised); border: 1px solid var(--border); border-radius:
 .fib-levels { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
 .fib-level { display: flex; align-items: center; gap: 6px; }
 .fib-level input[type=number] { width: 72px; background: var(--raised); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 3px 5px; }
-.chart-bottom { display: flex; align-items: center; gap: 6px; padding: 2px 8px 6px 18px; font-size: 12px; }
+.chart-bottom { display: flex; align-items: center; gap: 6px; padding: 4px 10px; min-height: 34px; font-size: 12px; background: var(--bg); }
 .chart-bottom .spacer { flex: 1; }
 .chart-bottom .ranges button { padding: 2px 7px; font-size: 12px; }
 .bb-btn { background: transparent; border: 1px solid transparent; color: var(--muted); border-radius: 4px; padding: 2px 7px; cursor: pointer; font: 12px var(--font); font-variant-numeric: tabular-nums; }
@@ -251,3 +255,11 @@ kbd { background: var(--raised); border: 1px solid var(--border); border-radius:
 .picker-tag.strategy { color: var(--link); border-color: color-mix(in srgb, var(--link) 45%, transparent); }
 .theme-toggle { display: inline-grid; place-items: center; min-width: 32px; }
 .theme-toggle svg { display: block; }
+.chart-type { position: relative; }
+.chart-type-btn { padding: 1px 4px; line-height: 0; }
+.chart-type-menu { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; min-width: 240px; max-height: 75vh; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 8px 24px var(--shadow); }
+.chart-type-group { display: flex; flex-direction: column; padding: 4px; }
+.chart-type-group + .chart-type-group { border-top: 1px solid var(--border); }
+.chart-type-menu button { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; background: transparent; border: 0; border-radius: 6px; color: var(--text); font: 14px var(--font); cursor: pointer; text-align: left; white-space: nowrap; }
+.chart-type-menu button:hover { background: var(--raised); }
+.chart-type-menu button.on { background: var(--text); color: var(--bg); }

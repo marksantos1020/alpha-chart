@@ -2,6 +2,6 @@
 html, body, #root { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.4; font-variant-numeric: tabular-nums; }
 button, input, select { font: inherit; color: inherit; }
-.example { height: 100%; display: flex; flex-direction: column; padding-top: 10px; min-width: 0; }
+.example { height: 100%; display: flex; flex-direction: column; gap: 4px; min-width: 0; background: var(--gap); }
 .credit { color: var(--muted); font-size: 12px; text-decoration: none; }
 .credit:hover { color: var(--text); }

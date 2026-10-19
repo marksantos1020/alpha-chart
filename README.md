@@ -3,7 +3,8 @@
 A TradingView-style trading chart for React, built on
 [lightweight-charts](https://github.com/tradingview/lightweight-charts) v5:
 
-- candles, hollow candles, bars, Heikin Ashi, line, area and baseline styles
+- 12 chart types in a TradingView-style menu: bars, candles, hollow candles, line, line with markers, step line,
+  area, HLC area, baseline, columns, high-low, Heikin Ashi
 - 14 drawing tools (trend lines, rays, channels, Fibonacci, measure, text, …) with magnet, undo/redo, lock/hide
 - TradingView-style price axis: filled labels at the latest bar, outlined values of the last visible bar in history, countdown inside the price label
 - indicator panes, a legend with values under the crosshair, a settings dialog (inputs, style, visibility per interval), drag to reorder
@@ -170,12 +171,20 @@ stylesheet restyles the whole chart:
 | `--buy`, `--sell`, `--accent`, `--blue`, `--link` | up/down values, focus and highlights, active tools, links |
 | `--chart-text`, `--chart-grid`, `--chart-crosshair`, `--chart-crosshair-label` | axis labels, grid, crosshair |
 | `--hover`, `--veil`, `--backdrop`, `--shadow` | legend hover, loading veil, dialog backdrop, shadows |
+| `--gap` | the space between panels |
 
 ```css
 [data-theme="light"] { --chart-grid: #eef1f6; --accent: #7e57c2; }
 ```
 
 Candle colours are a chart setting (Chart settings › Symbol), not a theme token.
+
+The toolbar, drawing toolbar, chart and bottom bar are separate panels on `--bg`. Put the chart in a
+flex column with `gap: 4px` and `background: var(--gap)` to separate them like TradingView does:
+
+```css
+.chart-host { display: flex; flex-direction: column; gap: 4px; background: var(--gap); }
+```
 
 ## Development
 
