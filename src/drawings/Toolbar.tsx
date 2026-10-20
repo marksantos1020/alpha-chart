@@ -39,6 +39,12 @@ const Chevron = ({ up = false }: { up?: boolean }) => (
   </svg>
 );
 
+const MoreArrow = () => (
+  <svg width="5" height="8" viewBox="0 0 5 8" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 1l3 3-3 3" />
+  </svg>
+);
+
 const GROUPS: { key: string; tools: ToolId[] }[] = [
   { key: "lines", tools: ["trend", "ray", "extended", "arrow", "hline", "hray", "vline", "crossline"] },
   { key: "shapes", tools: ["channel", "rect"] },
@@ -110,7 +116,7 @@ export default function Toolbar({ store, onTool, onZoomOut, count }: Props) {
                     onClick={(e) => {
                       const r = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
                       setOpen(open?.key === g.key ? null : { key: g.key, top: r.top, left: r.right + 4 });
-                    }}>›</button>
+                    }}><MoreArrow /></button>
             {open?.key === g.key && (
               <div className="dt-flyout" role="menu" style={{ position: "fixed", top: Math.min(open.top, window.innerHeight - 40 * g.tools.length - 16), left: open.left }}>
                 {g.tools.map((t) => (
