@@ -45,11 +45,11 @@ const MoreArrow = () => (
   </svg>
 );
 
-const GROUPS: { key: string; tools: ToolId[] }[] = [
-  { key: "lines", tools: ["trend", "ray", "extended", "arrow", "hline", "hray", "vline", "crossline"] },
-  { key: "shapes", tools: ["channel", "rect"] },
-  { key: "fib", tools: ["fib", "fibext"] },
-  { key: "annot", tools: ["brush", "text"] },
+const GROUPS: { key: string; label: string; tools: ToolId[] }[] = [
+  { key: "lines", label: "Lines", tools: ["trend", "ray", "extended", "arrow", "hline", "hray", "vline", "crossline"] },
+  { key: "shapes", label: "Shapes", tools: ["channel", "rect"] },
+  { key: "fib", label: "Fibonacci", tools: ["fib", "fibext"] },
+  { key: "annot", label: "Annotations", tools: ["brush", "text"] },
 ];
 const HINT: Partial<Record<ToolId, string>> = { trend: "Alt+T", hline: "Alt+H", vline: "Alt+V", fib: "Alt+F", crossline: "Alt+C", rect: "Alt+R", measure: "Shift+click" };
 
@@ -84,10 +84,21 @@ export default function Toolbar({ store, onTool, onZoomOut, count }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node) && !(e.target as Element)?.closest?.(".dt-flyout")) setOpen(null); };
-    window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
+    const down = (e: PointerEvent) => { if (!(e.target as Element)?.closest?.(".dt-flyout, .dt-group.open .dt-more")) setOpen(null); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(null); } };
+    const close = () => setOpen(null);
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("keydown", key, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("keydown", key, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("blur", close);
+    };
   }, [open]);
+  useEffect(() => setOpen(null), [store.tool]);
 
   const pick = (t: ToolId) => { store.setTool(store.tool === t && t !== "cursor" ? "cursor" : t); onTool(); };
   const btn = (t: ToolId, extra?: ReactNode) => (
@@ -109,18 +120,19 @@ export default function Toolbar({ store, onTool, onZoomOut, count }: Props) {
       {GROUPS.map((g) => {
         const cur = g.tools.includes(store.tool) ? store.tool : last[g.key];
         return (
-          <div className="dt-group" key={g.key}>
+          <div className={`dt-group ${open?.key === g.key ? "open" : ""}`} key={g.key}>
             <button className={`dt-btn ${g.tools.includes(store.tool) ? "on" : ""}`} title={`${TOOL_LABEL[cur]}${HINT[cur] ? ` (${HINT[cur]})` : ""}`}
                     aria-label={TOOL_LABEL[cur]} onClick={() => pick(cur)}><Icon name={cur} /></button>
-            <button className="dt-more" title="More tools" aria-label={`More ${g.key} tools`}
+            <button className="dt-more" title={g.label} aria-label={`${g.label} tools`} aria-haspopup="menu" aria-expanded={open?.key === g.key}
                     onClick={(e) => {
                       const r = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-                      setOpen(open?.key === g.key ? null : { key: g.key, top: r.top, left: r.right + 4 });
+                      const bar = ref.current?.getBoundingClientRect();
+                      setOpen(open?.key === g.key ? null : { key: g.key, top: r.top, left: (bar?.right ?? r.right) + 4 });
                     }}><MoreArrow /></button>
             {open?.key === g.key && (
-              <div className="dt-flyout" role="menu" style={{ position: "fixed", top: Math.min(open.top, window.innerHeight - 40 * g.tools.length - 16), left: open.left }}>
+              <div className="dt-flyout" role="menu" aria-label={`${g.label} tools`} style={{ position: "fixed", top: Math.min(open.top, window.innerHeight - 40 * g.tools.length - 16), left: open.left }}>
                 {g.tools.map((t) => (
-                  <button key={t} className={store.tool === t ? "on" : ""} onClick={() => { setLast((l) => ({ ...l, [g.key]: t })); setOpen(null); store.setTool(t); onTool(); }}>
+                  <button key={t} role="menuitem" className={store.tool === t ? "on" : ""} onClick={() => { setLast((l) => ({ ...l, [g.key]: t })); setOpen(null); store.setTool(t); onTool(); }}>
                     <Icon name={t} /><span>{TOOL_LABEL[t]}</span>{HINT[t] && <kbd>{HINT[t]}</kbd>}
                   </button>
                 ))}

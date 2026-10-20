@@ -305,8 +305,12 @@ kbd { background: var(--raised); border: 1px solid var(--border); border-radius:
 .dt-sep { width: 32px; height: 1px; background: var(--divider); margin: 2px 0; flex: none; }
 .dt-group { position: relative; display: flex; align-items: stretch; }
 .dt-more { position: absolute; left: calc(100% - 2px); top: 0; width: 11px; height: 34px; padding: 0; display: grid; place-items: center; background: transparent; border: 0; border-radius: 4px 0 0 4px; color: var(--text); cursor: pointer; opacity: 0; }
-.dt-group:hover .dt-more { opacity: 1; }
-.dt-more:hover { color: var(--text); background: var(--btn-hover); opacity: 1; }
+.dt-group:hover .dt-more, .dt-more:focus-visible { opacity: 1; }
+.dt-more:hover, .dt-group.open .dt-more { background: var(--btn-hover); opacity: 1; }
+.dt-more svg { transition: transform 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.dt-more:hover svg { transform: translateX(1px); }
+.dt-group.open .dt-more svg { transform: rotate(180deg); }
+.dt-group.open .dt-more:hover svg { transform: translateX(-1px) rotate(180deg); }
 .dt-flyout { position: fixed; z-index: 60; min-width: 230px; background: var(--panel); border: 1px solid var(--menu-border); border-radius: 6px; padding: 6px; box-shadow: var(--menu-shadow); display: flex; flex-direction: column; }
 .dt-flyout button { display: flex; align-items: center; gap: 10px; background: transparent; border: 0; color: var(--text); height: 40px; padding: 0 8px 0 4px; border-radius: 6px; cursor: pointer; font: 14px var(--font); text-align: left; }
 .dt-flyout button span { flex: 1; }
