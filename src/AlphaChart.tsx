@@ -37,6 +37,7 @@ import SettingsDialog from "./indicators/SettingsDialog";
 import TemplatesMenu from "./indicators/TemplatesMenu";
 import { DrawingController, type Bars } from "./drawings/controller";
 import { timeToLogical } from "./drawings/geometry";
+import { defaultStyle } from "./drawings/types";
 import { useDrawings, type DrawingsStore } from "./drawings/useDrawings";
 import Toolbar from "./drawings/Toolbar";
 import FavoritesBar from "./drawings/FavoritesBar";
@@ -86,6 +87,14 @@ export interface AlphaChartProps {
 export interface AlphaChartHandle {
   goTo(ms: number): void;
   showRange(range: RangeKey): void;
+  /** the indicators on the chart with their legend title, arguments and current values */
+  indicators(): { id: string; libraryId: string; title: string; args: string; values: string[] }[];
+  addIndicator(libraryId: string): void;
+  /** removes the first indicator whose title or library id matches; false when none does */
+  removeIndicator(match: string): boolean;
+  /** a horizontal line drawing at a price */
+  addLevel(price: number): void;
+  lastBars(n: number): Bar[];
 }
 
 const DEFAULT_STORAGE = localChartStorage();
@@ -214,7 +223,6 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   const feed = useDatafeed(datafeed, symbol, interval, onInterval, intervals);
   const { bars: candles, dataSeq, loading, fetching } = feed;
   const onNeedOlder = feed.loadOlder, viewRequest = feed.viewRequest;
-  useImperativeHandle(ref, () => ({ goTo: feed.goTo, showRange: feed.showRange }), [feed.goTo, feed.showRange]);
   const blockRef = useRef(block); blockRef.current = block;
   const volumeUnitRef = useRef(volumeUnit); volumeUnitRef.current = volumeUnit;
   const firstCandleMs = candles.length ? candles[0].time : undefined;
@@ -967,6 +975,27 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     const { name: title, args } = legendTitle(entry, inst, st, sourceLabel);
     return { inst, k, title, args, values, overlay, pane: paneOf.get(inst.id) ?? (overlay ? 0 : -1), error: st?.error ?? null };
   });
+
+  useImperativeHandle(ref, () => ({
+    goTo: feed.goTo, showRange: feed.showRange,
+    indicators: () => rows.map((r) => ({ id: r.inst.id, libraryId: r.inst.libraryId, title: r.title, args: r.args, values: r.values.map((v) => v.text) })),
+    addIndicator: (libraryId: string) => ind.add(libraryId),
+    removeIndicator: (match: string) => {
+      const m = match.toLowerCase();
+      const r = rows.find((x) => x.title.toLowerCase() === m || x.inst.libraryId.toLowerCase() === m) ?? rows.find((x) => x.title.toLowerCase().includes(m));
+      if (!r) return false;
+      ind.remove(r.inst.id);
+      return true;
+    },
+    addLevel: (price: number) => {
+      const last = candlesRef.current[candlesRef.current.length - 1];
+      if (!last || !(price > 0)) return;
+      const before = drawRef.current.ref.current;
+      drawRef.current.setItems([...before, { id: uid(), type: "hline", anchors: [{ time: last.time, price }], style: defaultStyle("hline") }], before);
+      drawCtl.current?.refresh();
+    },
+    lastBars: (n: number) => candlesRef.current.slice(-n),
+  }), [feed.goTo, feed.showRange, rows, ind]);
 
   const paneOwners = [...new Set(rows.filter((r) => r.pane > 0).map((r) => r.pane))].sort((a, b) => a - b)
     .map((pane) => rows.find((r) => r.pane === pane && !r.inst.mergeWith) ?? rows.find((r) => r.pane === pane)!);
