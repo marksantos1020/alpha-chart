@@ -38,6 +38,12 @@ export interface DrawLine { id: number; x1: number; y1: number; x2: number; y2: 
 export interface DrawLabel { id: number; x: number; y: number; text: string; color: string; textColor: string; style: string; size: string }
 export interface DrawBox { id: number; left: number; top: number; right: number; bottom: number; color: string; bgColor: string; width: number; style: string; text: string; textColor: string }
 export interface DrawFrame { lines: DrawLine[]; labels: DrawLabel[]; boxes: DrawBox[] }
+
+export interface ProfileSpec {
+  title: string; range: "visible" | "session"; session?: "day" | "week";
+  rows: number; valueArea: number; widthPercent: number; placement: "right" | "left";
+  upColor: string; downColor: string; vaUpColor: string; vaDownColor: string; pocColor: string; showPoc: boolean;
+}
 export interface BandFrame { title: string; color: string; times: Float64Array; upper: Float64Array; lower: Float64Array; offset?: number; colorDown?: string }
 export interface HLine { value: number; title?: string; color?: string; style?: string; width?: number; pane?: number }
 
@@ -49,6 +55,7 @@ export interface IndicatorFrame {
   bgcolors: { color: string; times: number[] }[];
   barcolors?: { color: string; times: number[] }[];
   drawings?: DrawFrame;
+  profiles?: ProfileSpec[];
 }
 
 export interface TailFrame {

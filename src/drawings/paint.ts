@@ -4,6 +4,7 @@ import {
   timeToLogical, vwapFrom, type Bars, type Pt, type Timeline,
 } from "./geometry";
 import { EXTEND_TYPES, type Anchor, type Drawing } from "./types";
+import { computeProfile, paintProfile } from "../volumeProfile";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -412,6 +413,24 @@ export function paint(ctx: Ctx, d: Drawing, env: Env) {
       path(ctx, pv); ctx.stroke();
       break;
     }
+    case "fixedvp": case "anchoredvp": {
+      const n = env.bars.times.length;
+      if (!n) break;
+      const ta = d.anchors[0].time, tb = d.type === "fixedvp" ? d.anchors[1]?.time ?? ta : env.bars.times[n - 1];
+      const i0 = Math.max(0, Math.ceil(timeToLogical(env.timeline, Math.min(ta, tb)) - 1e-9)), i1 = Math.min(n - 1, Math.floor(timeToLogical(env.timeline, Math.max(ta, tb)) + 1e-9));
+      const p = computeProfile(env.bars, i0, i1, 24, 70);
+      const xa = env.toPx({ time: Math.min(ta, tb), price: 0 }).x, xb = env.toPx({ time: Math.max(ta, tb), price: 0 }).x;
+      if (!p) { line(ctx, { x: xa, y: 0 }, { x: xa, y: h }); break; }
+      const yOf = (price: number) => env.toPx({ time: ta, price }).y;
+      const top = yOf(p.hi), bottom = yOf(p.lo);
+      fillPoly(ctx, [{ x: xa, y: top }, { x: xb, y: top }, { x: xb, y: bottom }, { x: xa, y: bottom }], withAlpha(s.color, 0.06));
+      setLine(ctx, s.color, 1, "dashed");
+      ctx.strokeRect(xa, top, xb - xa, bottom - top);
+      paintProfile(ctx, p, yOf, xa, Math.max(20, (xb - xa) * 0.3), 1,
+                   { up: "rgba(41,98,255,0.3)", down: "rgba(251,192,45,0.3)", vaUp: "rgba(41,98,255,0.65)", vaDown: "rgba(251,192,45,0.65)", poc: "#FF5252" },
+                   { show: true, x0: xa, x1: xb });
+      break;
+    }
     case "pricerange": case "daterange": case "datepricerange": {
       if (pts.length < 2) break;
       const [a, b] = pts, st = rangeStats(env, d.anchors[0], d.anchors[1]);
@@ -702,5 +721,5 @@ export function moveHandle(d: Drawing, i: number, a: Anchor): Anchor[] {
   return d.anchors.map((x, k) => (k === i ? a : x));
 }
 
-export function axisPrices(d: Drawing): boolean { return !["regression", "avwap", "fibtime", "cyclic", "timecycles", "sine", "vline", "daterange"].includes(d.type); }
+export function axisPrices(d: Drawing): boolean { return !["regression", "avwap", "fixedvp", "anchoredvp", "fibtime", "cyclic", "timecycles", "sine", "vline", "daterange"].includes(d.type); }
 export function axisTimes(d: Drawing): boolean { return !["hline", "hray", "pricerange"].includes(d.type); }

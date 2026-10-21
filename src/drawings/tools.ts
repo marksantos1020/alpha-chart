@@ -20,7 +20,7 @@ export const GROUPS: ToolGroup[] = [
   ] },
   { key: "forecast", label: "Forecasting and measurement tools", sections: [
     { title: "Forecasting", tools: ["long", "short"] },
-    { title: "Volume-based", tools: ["avwap"] },
+    { title: "Volume-based", tools: ["avwap", "fixedvp", "anchoredvp"] },
     { title: "Measurer", tools: ["pricerange", "daterange", "datepricerange"] },
   ] },
   { key: "shapes", label: "Geometric shapes", sections: [

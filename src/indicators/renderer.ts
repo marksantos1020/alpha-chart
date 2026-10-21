@@ -5,6 +5,8 @@ import {
 import { BandPrimitive } from "./bandPrimitive";
 import { BgPrimitive } from "./bgPrimitive";
 import { DrawPrimitive } from "./drawPrimitive";
+import { ProfilePrimitive } from "./profilePrimitive";
+import type { ProfileBars } from "../volumeProfile";
 import { ValueLabels, type ValueLabel } from "../valueLabels";
 import type { BandFrame, HLine, IndicatorFrame, PlotFrame, PlotStyle } from "./types";
 
@@ -107,6 +109,7 @@ interface ItemHandle {
   plots: PlotHandle[]; bands: { prim: BandPrimitive; host: ISeriesApi<SeriesType> }[];
   bgs: { prim: BgPrimitive; host: ISeriesApi<SeriesType> }[]; lines: { host: ISeriesApi<SeriesType>; line: IPriceLine; h: HLine }[];
   draws: { prim: DrawPrimitive; host: ISeriesApi<SeriesType> }[]; hosts: ISeriesApi<SeriesType>[];
+  profiles: { prim: ProfilePrimitive; host: ISeriesApi<SeriesType> }[];
 }
 
 export interface ViewEnd { timeMs: number; latest: boolean }
@@ -121,6 +124,7 @@ export class IndicatorRenderer {
   private afterBuild: () => void = () => undefined;
   private selected: string | null = null;
   private timeToX: (t: number) => number | null = () => null;
+  private bars: () => ProfileBars = () => ({ times: [], open: [], high: [], low: [], close: [], volume: [] });
 
   constructor(private chart: IChartApi, private background: () => string = () => "#151b23") {}
 
@@ -130,6 +134,7 @@ export class IndicatorRenderer {
   setAfterBuild(fn: () => void) { this.afterBuild = fn; }
   setSelected(id: string | null) { this.selected = id; }
   setTimeToX(fn: (t: number) => number | null) { this.timeToX = fn; }
+  setBars(fn: () => ProfileBars) { this.bars = fn; }
 
   itemOf(api: ISeriesApi<SeriesType>): string | null {
     for (const [id, h] of this.handles) if (h.plots.some((p) => p.api === api)) return id;
@@ -152,7 +157,7 @@ export class IndicatorRenderer {
       const plots = f.plots.map((p) => `${p.title}|${p.style}|${p.display}|${it.paneFor(p.pane)}`).join(",");
       const bands = f.bands.map((b) => b.title).join(",") + `|bg${f.bgcolors.length}`;
       const lines = f.hlines.map((h) => `${h.value}|${it.paneFor(h.pane ?? (f.plots[0]?.pane ?? 0))}`).join(",");
-      return `${it.id}:[${plots}][${bands}][${lines}]${f.drawings ? "d" : ""}${it.scale ?? ""}`;
+      return `${it.id}:[${plots}][${bands}][${lines}]${f.drawings ? "d" : ""}${f.profiles?.length ? `p${f.profiles.length}` : ""}${it.scale ?? ""}`;
     }).join(";");
   }
 
@@ -173,6 +178,7 @@ export class IndicatorRenderer {
       for (const b of h.bands) { try { b.host.detachPrimitive(b.prim); } catch {} }
       for (const b of h.bgs) { try { b.host.detachPrimitive(b.prim); } catch {} }
       for (const d of h.draws) { try { d.host.detachPrimitive(d.prim); } catch {} }
+      for (const p of h.profiles) { try { p.host.detachPrimitive(p.prim); } catch {} }
       for (const x of h.hosts) { try { this.chart.removeSeries(x); } catch {} }
       for (const l of h.lines) { try { l.host.removePriceLine(l.line); } catch {} }
       for (const p of h.plots) { try { this.chart.removeSeries(p.api); } catch {} }
@@ -184,7 +190,7 @@ export class IndicatorRenderer {
     const wanted: { it: RenderItem; p: PlotFrame; index: number; pane: number }[] = [];
     for (const it of items) it.frame?.plots.forEach((p, index) => wanted.push({ it, p, index, pane: it.paneFor(p.pane) }));
     wanted.sort((a, b) => a.pane - b.pane);
-    for (const it of items) this.handles.set(it.id, { plots: [], bands: [], bgs: [], lines: [], draws: [], hosts: [] });
+    for (const it of items) this.handles.set(it.id, { plots: [], bands: [], bgs: [], lines: [], draws: [], hosts: [], profiles: [] });
     for (const w of wanted) {
       const api = this.addSeries(w.p, w.pane, w.it.scale === "left" ? "left" : w.it.scale === "none" ? `own:${w.it.id}` : undefined);
       this.handles.get(w.it.id)!.plots.push({ api, plot: w.p, index: w.index, pane: w.pane, label: false, color: w.p.color });
@@ -200,6 +206,12 @@ export class IndicatorRenderer {
       const h = this.handles.get(it.id)!;
       const f = it.frame;
       if (!f) continue;
+      const main = this.front();
+      if (f.profiles?.length && main) {
+        const prim = new ProfilePrimitive({ specs: f.profiles, visible: true }, () => this.bars(), (t) => this.timeToX(t));
+        main.attachPrimitive(prim);
+        h.profiles.push({ prim, host: main });
+      }
       if (h.plots.length === 0) {
         if (!f.drawings) continue;
         const pane = it.paneFor(0);
@@ -324,6 +336,7 @@ export class IndicatorRenderer {
       this.setPlotData(ph.api, p, st);
     }
     h.draws.forEach((d) => d.prim.set({ frame: f.drawings, visible: it.visible }));
+    h.profiles.forEach((p) => p.prim.set({ specs: f.profiles ?? [], visible: it.visible }));
     h.bgs.forEach((b, i) => {
       const bg = f.bgcolors[i];
       if (bg) b.prim.set({ times: bg.times, color: bg.color, visible: it.visible });

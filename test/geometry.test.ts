@@ -6,6 +6,7 @@ import {
 import { handlePoints, hitTest, moveHandle, type Env } from "../src/drawings/paint";
 import { defaultStyle, type Drawing } from "../src/drawings/types";
 import { isSelectionBar, selectionStep } from "../src/selection";
+import { computeProfile, sessionRanges } from "../src/volumeProfile";
 
 let n = 0;
 const ok = (name: string, fn: () => void) => { fn(); n++; console.log(`ok  ${name}`); };
@@ -151,6 +152,17 @@ ok("selection circles: every 10th bar by bar time, thinned by doubling only when
   assert.equal(marked(10).length, 20);
   for (let i = 1; i < marked(10).length; i++) assert.equal(marked(10)[i] - marked(10)[i - 1], 10 * hour);
   assert.ok(marked(20).every((t) => marked(10).includes(t)));
+});
+
+ok("volume profile: volume spread over each bar's range, POC and a 70% value area grown from it", () => {
+  const b = { times: [0, 1], open: [1, 6], close: [9, 5.5], high: [10, 6], low: [0, 5], volume: [100, 50] };
+  const p = computeProfile(b, 0, 1, 10, 70)!;
+  for (let r = 0; r < 10; r++) close(p.up[r], 10);
+  close(p.down[5], 50); close(p.down[4] + p.down[6], 0);
+  assert.equal(p.poc, 5);
+  assert.deepEqual([p.vaLo, p.vaHi], [4, 9]);
+  close(p.total, 150);
+  assert.deepEqual(sessionRanges([0, 10, 86_400_000, 86_400_010, 2 * 86_400_000], 0, 4, 86_400_000), [[0, 1], [2, 3], [4, 4]]);
 });
 
 console.log(`GEOMETRY OK (${n})`);

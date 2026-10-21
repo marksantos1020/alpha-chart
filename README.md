@@ -5,8 +5,9 @@ A TradingView-style trading chart for React, built on
 
 - 12 chart types in a TradingView-style menu: bars, candles, hollow candles, line, line with markers, step line,
   area, HLC area, baseline, columns, high-low, Heikin Ashi
-- a TradingView-style drawing toolbar with 57 tools in grouped menus: lines, channels, pitchforks, Fibonacci and Gann,
-  chart patterns and Elliott waves, cycles, long/short positions, anchored VWAP, range measurers, shapes, brushes,
+- a TradingView-style drawing toolbar with 59 tools in grouped menus: lines, channels, pitchforks, Fibonacci and Gann,
+  chart patterns and Elliott waves, cycles, long/short positions, anchored VWAP, fixed-range and anchored volume profiles,
+  range measurers, shapes, brushes,
   text notes and icons; cursors (cross, dot, arrow, eraser), magnet modes, favorites with a floating bar,
   undo/redo, lock, hide and remove menus
 - TradingView-style price axis: filled labels at the latest bar, outlined values of the last visible bar in history, countdown inside the price label
@@ -26,7 +27,7 @@ The chart fetches nothing by itself. The host application supplies three things:
 |---|---|---|
 | `Datafeed` | bars: a first page, older pages while scrolling left, live updates | — |
 | `ChartStorage` | the layout, drawings and indicator templates | `localChartStorage()` (default) |
-| `IndicatorEngine` | the studies in the picker and their computation | `basicEngine`: 26 standard indicators |
+| `IndicatorEngine` | the studies in the picker and their computation | `basicEngine`: 95 standard indicators |
 
 It comes from AlphaForge, a trading terminal for Bittensor subnet alpha markets, where the
 same chart runs with a market API datafeed, server-side storage and a scripting-language engine.
@@ -92,16 +93,19 @@ the tick size, so TAOUSDT shows `271.9` and BTCUSDT `82375.56`.
 
 ### Built-in indicators
 
-`basicEngine` gives the picker 26 common indicators, computed with TradingView's formulas and default
+`basicEngine` gives the picker 95 common indicators, computed with TradingView's formulas and default
 inputs, colours and levels:
 
 | Category | Indicators |
 |---|---|
-| Moving averages | SMA, EMA, WMA, Hull MA, VWMA |
-| Bands & channels | Bollinger Bands, Keltner Channels, Donchian Channels, Envelope |
-| Trend | VWAP (daily, UTC), Supertrend, Parabolic SAR, ADX |
-| Oscillators | RSI, MACD, Stochastic, Stochastic RSI, CCI, Williams %R, Momentum, ROC, ATR |
-| Volume | Volume with MA, OBV, Money Flow Index, Chaikin Money Flow |
+| Moving averages | SMA, EMA, WMA, Hull MA, VWMA, Double EMA, Triple EMA, ALMA, Smoothed MA, Least Squares MA, McGinley Dynamic, MA Cross, MA Ribbon, Guppy MMA |
+| Bands & channels | Bollinger Bands, Bollinger %B, Bollinger BandWidth, Keltner Channels, Donchian Channels, Envelope, Moving Average Channel, Standard Error Bands |
+| Trend | VWAP (daily, UTC), Supertrend, Parabolic SAR, ADX, DMI, Aroon, Vortex, Choppiness, Chop Zone, Trend Strength Index, Ichimoku Cloud, Williams Alligator, Chande Kroll Stop, Volatility Stop, Candlestick Patterns (19) |
+| Support & resistance | Pivot Points Standard (Traditional, Fibonacci, Woodie, Classic, Camarilla), Pivot Points High Low, Zig Zag, Auto Fib Retracement, Auto Fib Extension, Linear Regression Channel, Williams Fractals, 52 Week High/Low |
+| Oscillators | RSI, MACD, Stochastic, Stochastic RSI, CCI, Williams %R, Momentum, ROC, ATR, Awesome Oscillator, TRIX, Ultimate Oscillator, Chande Momentum, True Strength Index, Price Oscillator, Detrended Price Oscillator, Know Sure Thing, Coppock Curve, Bull Bear Power, Balance of Power, Historical Volatility, Mass Index, Relative Vigor Index, Fisher Transform, Connors RSI, SMI Ergodic Indicator and Oscillator, Relative Volatility Index, Woodies CCI, Accelerator Oscillator, Rank Correlation Index, Ulcer Index, Standard Deviation, Linear Regression Slope, Average Day Range, Majority Rule |
+| Volume | Volume with MA, OBV, Money Flow Index, Chaikin Money Flow, Accumulation/Distribution, Chaikin Oscillator, Ease of Movement, Price Volume Trend, Volume Oscillator, Elder Force Index, Net Volume, Klinger Oscillator, Visible Range Volume Profile, Session Volume Profile |
+
+Any indicator's source input can be another indicator's line, e.g. an EMA of the RSI.
 
 ```tsx
 import { AlphaChart, basicEngine } from "alpha-chart";
@@ -127,7 +131,12 @@ interface IndicatorEngine {
 The chart posts `data` (all bars of `"<symbol>:<interval>"`), `bar` (the newest bar changed),
 `set` (an instance's study and inputs) and `remove`. The engine answers `meta` (input definitions,
 title, format), `frame` (plots, bands, horizontal levels, shapes, background colours; `full: false`
-for a tail update) or `error`. `src/basic/engine.ts` is a complete engine to start from.
+for a tail update) or `error`. A frame may also shift a plot or band by `offset` bars, colour each bar
+from a `palette` by `colors` (indexes), draw candles (`style: "candle" | "bar"` with `open`, `high`, `low`),
+recolour the chart's bars (`barcolors`), carry `drawings` (lines, labels and boxes at time/price points) and
+ask for `profiles` (visible-range or per-session volume profiles the chart builds from its own candles).
+An engine that sets `indicatorSources: true` receives `"@<instance id>:<plot title>"` for a source
+input the user pointed at another indicator. `src/basic/engine.ts` is a complete engine to start from.
 
 ### Props
 

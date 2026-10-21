@@ -1,5 +1,5 @@
 import type { StudyEntry } from "../types";
-import type { HLine, IndicatorConfig, InputDef } from "../indicators/types";
+import type { DrawFrame, HLine, IndicatorConfig, InputDef, ProfileSpec } from "../indicators/types";
 import {
   change, ema, hma, highest, lowest, map, map2, meanDev, rma, rsi, sma, stdev, stoch, sum, trueRange, wma, type Arr,
 } from "./math";
@@ -16,9 +16,11 @@ export interface Ctx extends Series {
 export interface PlotOut {
   title: string; values: Arr; color: string;
   style?: string; width?: number; lineStyle?: string; colorUp?: string; colorDown?: string; colorBy?: string; display?: string;
+  offset?: number; palette?: string[]; colors?: Arr;
 }
-export interface BandOut { title: string; upper: Arr | number; lower: Arr | number; color: string }
-export interface StudyOut { plots: PlotOut[]; bands?: BandOut[]; hlines?: HLine[] }
+export interface BandOut { title: string; upper: Arr | number; lower: Arr | number; color: string; colorDown?: string; offset?: number }
+export interface ShapeOut { cond: Arr; shape: string; location: string; color: string; offset?: number; text?: string }
+export interface StudyOut { plots: PlotOut[]; bands?: BandOut[]; hlines?: HLine[]; shapes?: ShapeOut[]; drawings?: DrawFrame; profiles?: ProfileSpec[] }
 
 export interface Study extends StudyEntry {
   inputs: InputDef[];
@@ -28,17 +30,17 @@ export interface Study extends StudyEntry {
 
 export const SOURCES = ["open", "high", "low", "close", "hl2", "hlc3", "ohlc4", "hlcc4"];
 
-const BLUE = "#2962FF", ORANGE = "#FF6D00", PURPLE = "#7E57C2", GREEN = "#26A69A", TEAL = "#089981", RED = "#F23645", GREY = "#787B86";
-const BAND_FILL = "rgba(33,150,243,0.05)", OSC_FILL = "rgba(126,87,194,0.1)";
+export const BLUE = "#2962FF", ORANGE = "#FF6D00", PURPLE = "#7E57C2", GREEN = "#26A69A", TEAL = "#089981", RED = "#F23645", GREY = "#787B86";
+export const BAND_FILL = "rgba(33,150,243,0.05)", OSC_FILL = "rgba(126,87,194,0.1)";
 
-const int = (name: string, d: number, min = 1, max = 1000): InputDef => ({ name, type: "int", default: d, min, max });
-const float = (name: string, d: number, step = 0.1, min = 0): InputDef => ({ name, type: "float", default: d, step, min });
-const source = (d = "close"): InputDef => ({ name: "Source", type: "source", default: d, options: SOURCES });
-const levels = (hi: number, lo: number, mid?: number): HLine[] => [
+export const int = (name: string, d: number, min = 1, max = 1000): InputDef => ({ name, type: "int", default: d, min, max });
+export const float = (name: string, d: number, step = 0.1, min = 0): InputDef => ({ name, type: "float", default: d, step, min });
+export const source = (d = "close"): InputDef => ({ name: "Source", type: "source", default: d, options: SOURCES });
+export const levels = (hi: number, lo: number, mid?: number): HLine[] => [
   { value: hi, color: GREY, style: "dashed" }, ...(mid === undefined ? [] : [{ value: mid, color: GREY, style: "dotted" }]), { value: lo, color: GREY, style: "dashed" },
 ];
 export const MA_TYPES = ["SMA", "EMA", "SMMA (RMA)", "WMA", "VWMA"];
-function movingAverage(type: string, s: Arr, v: Arr, len: number): Arr {
+export function movingAverage(type: string, s: Arr, v: Arr, len: number): Arr {
   switch (type) {
     case "EMA": return ema(s, len);
     case "SMMA (RMA)": return rma(s, len);
@@ -47,7 +49,7 @@ function movingAverage(type: string, s: Arr, v: Arr, len: number): Arr {
     default: return sma(s, len);
   }
 }
-const band = (hi: number, lo: number): BandOut => ({ title: "Background", upper: hi, lower: lo, color: OSC_FILL });
+export const band = (hi: number, lo: number): BandOut => ({ title: "Background", upper: hi, lower: lo, color: OSC_FILL });
 
 function ma(id: string, name: string, shortTitle: string, len: number, f: (x: Arr, n: number) => Arr, description: string, color = BLUE): Study {
   return {
@@ -75,7 +77,7 @@ function supertrend(x: Ctx, factor: number, len: number) {
   return { line, dir };
 }
 
-function sar(x: Ctx, start: number, inc: number, max: number): Arr {
+export function sar(x: Ctx, start: number, inc: number, max: number): Arr {
   const n = x.c.length, out = new Float64Array(n).fill(NaN);
   let result = NaN, maxMin = NaN, acc = NaN, below = false;
   for (let i = 1; i < n; i++) {
@@ -107,7 +109,7 @@ function fixnan(x: Arr): Arr {
   return map(x, (v) => (Number.isNaN(v) ? last : (last = v)));
 }
 
-function adx(x: Ctx, diLen: number, adxLen: number): Arr {
+export function dmi(x: Ctx, diLen: number, adxLen: number): { plus: Arr; minus: Arr; adx: Arr } {
   const up = change(x.h), down = map(change(x.l), (v) => -v);
   const plusDM = map2(up, down, (u, d) => (Number.isNaN(u) ? NaN : u > d && u > 0 ? u : 0));
   const minusDM = map2(up, down, (u, d) => (Number.isNaN(d) ? NaN : d > u && d > 0 ? d : 0));
@@ -116,8 +118,9 @@ function adx(x: Ctx, diLen: number, adxLen: number): Arr {
   const atr = rma(tr, diLen);
   const plus = fixnan(map2(rma(plusDM, diLen), atr, (a, b) => (100 * a) / b));
   const minus = fixnan(map2(rma(minusDM, diLen), atr, (a, b) => (100 * a) / b));
-  return map(rma(map2(plus, minus, (p, m) => Math.abs(p - m) / (p + m === 0 ? 1 : p + m)), adxLen), (v) => 100 * v);
+  return { plus, minus, adx: map(rma(map2(plus, minus, (p, m) => Math.abs(p - m) / (p + m === 0 ? 1 : p + m)), adxLen), (v) => 100 * v) };
 }
+const adx = (x: Ctx, diLen: number, adxLen: number) => dmi(x, diLen, adxLen).adx;
 
 function vwap(x: Ctx): Arr {
   const tp = x.src("hlc3");

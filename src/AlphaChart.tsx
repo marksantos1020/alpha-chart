@@ -408,7 +408,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     const live = instances.map((inst) => {
       const entry = engineRef.current?.entry(inst.libraryId);
       const f = ind.frameFor(inst.id, `${symbolRef.current}:${intervalRef.current}`);
-      if (!entry || !f || (f.plots.length === 0 && !f.drawings)) return null;
+      if (!entry || !f || (f.plots.length === 0 && !f.drawings && !f.profiles?.length)) return null;
       const cfg = states[inst.id]?.config ?? {};
       return { inst, f, cfg, overlay: inst.overlay ?? cfg.overlay ?? entry.overlay };
     }).filter((x): x is NonNullable<typeof x> => !!x);
@@ -525,6 +525,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     chart.current = c; series.current = s; vol.current = v;
     const background = () => colorsRef.current?.bg ?? "#151b23";
     renderer.current = new IndicatorRenderer(c, background);
+    renderer.current.setBars(() => barsRef.current);
     renderer.current.setTimeToX((t) => {
       const ts = c.timeScale(), x0 = ts.logicalToCoordinate(0 as never), x1 = ts.logicalToCoordinate(1 as never);
       if (x0 === null || x1 === null) return null;

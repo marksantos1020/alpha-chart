@@ -6,7 +6,7 @@ export type DrawingType =
   | "fib" | "fibext" | "fibchannel" | "fibtime" | "fibfan" | "fibcircles" | "fibarcs" | "gannbox" | "gannfan"
   | "xabcd" | "abcd" | "trianglepat" | "headshoulders" | "threedrives"
   | "elliott" | "elliottabc" | "elliotttri" | "elliottwxy" | "cyclic" | "timecycles" | "sine"
-  | "long" | "short" | "avwap" | "pricerange" | "daterange" | "datepricerange"
+  | "long" | "short" | "avwap" | "fixedvp" | "anchoredvp" | "pricerange" | "daterange" | "datepricerange"
   | "brush" | "highlighter" | "arrowmarker" | "arrow" | "arrowup" | "arrowdown"
   | "rect" | "circle" | "ellipse" | "triangle" | "polyline" | "path" | "curve"
   | "text" | "callout" | "comment" | "pricelabel" | "pricenote" | "flag" | "icon";
@@ -53,7 +53,7 @@ export const ANCHORS: Record<DrawingType, number> = {
   fib: 2, fibext: 3, fibchannel: 3, fibtime: 2, fibfan: 2, fibcircles: 2, fibarcs: 2, gannbox: 2, gannfan: 2,
   xabcd: 5, abcd: 4, trianglepat: 4, headshoulders: 7, threedrives: 7,
   elliott: 6, elliottabc: 4, elliotttri: 6, elliottwxy: 4, cyclic: 2, timecycles: 2, sine: 2,
-  long: 1, short: 1, avwap: 1, pricerange: 2, daterange: 2, datepricerange: 2,
+  long: 1, short: 1, avwap: 1, fixedvp: 2, anchoredvp: 1, pricerange: 2, daterange: 2, datepricerange: 2,
   brush: FREEHAND, highlighter: FREEHAND, arrowmarker: 2, arrow: 2, arrowup: 1, arrowdown: 1,
   rect: 2, circle: 2, ellipse: 2, triangle: 3, polyline: OPEN, path: OPEN, curve: 3,
   text: 1, callout: 2, comment: 1, pricelabel: 1, pricenote: 2, flag: 1, icon: 1,
@@ -72,7 +72,7 @@ export const TOOL_LABEL: Record<ToolId, string> = {
   threedrives: "Three drives pattern", elliott: "Elliott impulse wave (12345)", elliottabc: "Elliott correction wave (ABC)",
   elliotttri: "Elliott triangle wave (ABCDE)", elliottwxy: "Elliott double combo wave (WXY)",
   cyclic: "Cyclic lines", timecycles: "Time cycles", sine: "Sine line",
-  long: "Long position", short: "Short position", avwap: "Anchored VWAP",
+  long: "Long position", short: "Short position", avwap: "Anchored VWAP", fixedvp: "Fixed range volume profile", anchoredvp: "Anchored volume profile",
   pricerange: "Price range", daterange: "Date range", datepricerange: "Date and price range",
   brush: "Brush", highlighter: "Highlighter", arrowmarker: "Arrow marker", arrow: "Arrow",
   arrowup: "Arrow mark up", arrowdown: "Arrow mark down",
@@ -123,6 +123,7 @@ export function defaultStyle(type: DrawingType): DrawingStyle {
     case "threedrives": case "elliott": case "elliottabc": case "elliotttri": case "elliottwxy": return { ...base, width: 1 };
     case "long": case "short": return { ...base, color: "#787B86", width: 1 };
     case "avwap": return { ...base, color: "#E91E63", width: 2 };
+    case "fixedvp": case "anchoredvp": return { ...base, color: "#2962FF", width: 1 };
     case "pricerange": case "daterange": case "datepricerange": return { ...base, width: 1 };
     case "brush": return { ...base, width: 2 };
     case "highlighter": return { ...base, color: "#FFEB3B", width: 12 };
