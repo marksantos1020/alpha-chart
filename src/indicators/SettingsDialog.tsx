@@ -9,6 +9,7 @@ interface Props {
   title: string;
   onChange: (patch: Partial<IndicatorInstance>) => void;
   onClose: () => void;
+  sources?: { value: string; label: string }[];
 }
 
 function parseColor(c: string): { hex: string; a: number } {
@@ -43,11 +44,27 @@ export function optionLabel(o: string): string {
   return o.charAt(0).toUpperCase() + o.slice(1);
 }
 
-function InputField({ def, value, onChange }: { def: InputDef; value: unknown; onChange: (v: unknown) => void }) {
+function InputField({ def, value, onChange, sources }: { def: InputDef; value: unknown; onChange: (v: unknown) => void; sources?: { value: string; label: string }[] }) {
   switch (def.type) {
     case "bool":
       return <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
-    case "select": case "source":
+    case "source":
+      if (sources?.length || String(value).startsWith("@")) {
+        const known = sources?.some((s) => s.value === value);
+        return (
+          <select value={String(value)} onChange={(e) => onChange(e.target.value)}>
+            {def.options?.map((o) => <option key={o} value={o}>{optionLabel(o)}</option>)}
+            {(sources?.length || !known) && (
+              <optgroup label="Indicators">
+                {sources?.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                {!known && String(value).startsWith("@") && <option value={String(value)}>(removed indicator)</option>}
+              </optgroup>
+            )}
+          </select>
+        );
+      }
+      return <select value={String(value)} onChange={(e) => onChange(e.target.value)}>{def.options?.map((o) => <option key={o} value={o}>{optionLabel(o)}</option>)}</select>;
+    case "select":
       return <select value={String(value)} onChange={(e) => onChange(e.target.value)}>{def.options?.map((o) => <option key={o} value={o}>{def.type === "source" ? optionLabel(o) : o}</option>)}</select>;
     case "color":
       return <ColorField value={String(value)} onChange={onChange} />;
@@ -72,7 +89,7 @@ function InputField({ def, value, onChange }: { def: InputDef; value: unknown; o
 const WIDTHS = [1, 2, 3, 4] as const;
 const VIS_INTERVALS: [string, string][] = [["1", "1m"], ["5", "5m"], ["15", "15m"], ["30", "30m"], ["60", "1h"], ["120", "2h"], ["240", "4h"], ["D", "1D"]];
 
-export default function SettingsDialog({ instance, state, frame, title, onChange, onClose }: Props) {
+export default function SettingsDialog({ instance, state, frame, title, onChange, onClose, sources }: Props) {
   const [tab, setTab] = useState<"inputs" | "style" | "visibility">("inputs");
   const [original] = useState(() => structuredClone(instance));
   const [menu, setMenu] = useState(false);
@@ -111,7 +128,7 @@ export default function SettingsDialog({ instance, state, frame, title, onChange
     if (d.type === "bool" && rest.length === 0) {
       return (
         <label className="check" key={d.name} title={d.tooltip}>
-          <InputField def={d} value={values(d)} onChange={(v) => setInput(d.name, v)} /><span>{d.name}</span>
+          <InputField def={d} value={values(d)} onChange={(v) => setInput(d.name, v)} sources={sources} /><span>{d.name}</span>
         </label>
       );
     }
@@ -119,13 +136,13 @@ export default function SettingsDialog({ instance, state, frame, title, onChange
       <label key={d.name}>
         <span className="field-name">{d.name}</span>
         <span className={rest.length ? "field-ctl part" : "field-ctl"}>
-          <InputField def={d} value={values(d)} onChange={(v) => setInput(d.name, v)} />{rest.length === 0 && info(d)}
+          <InputField def={d} value={values(d)} onChange={(v) => setInput(d.name, v)} sources={sources} />{rest.length === 0 && info(d)}
         </span>
       </label>,
       rest.length > 0 && (
         <span className="field-rest" key={`${d.name}:rest`}>
           {rest.map((r) => (
-            <label key={r.name} title={r.tooltip}><span>{r.name}</span><InputField def={r} value={values(r)} onChange={(v) => setInput(r.name, v)} /></label>
+            <label key={r.name} title={r.tooltip}><span>{r.name}</span><InputField def={r} value={values(r)} onChange={(v) => setInput(r.name, v)} sources={sources} /></label>
           ))}
         </span>
       ),
@@ -215,6 +232,9 @@ export default function SettingsDialog({ instance, state, frame, title, onChange
                   </div>
                 );
               })}
+              <div className="form-row">
+                <label className="check"><input type="checkbox" checked={instance.scaleLabels !== false} onChange={(e) => onChange({ scaleLabels: e.target.checked ? undefined : false })} /><span>Labels on price scale</span></label>
+              </div>
               {hlines.map((h) => {
                 const key = `hline:${h.title ?? h.value}`, st = instance.style[key] ?? {};
                 return (

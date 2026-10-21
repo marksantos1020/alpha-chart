@@ -5,7 +5,7 @@ import type {
 
 type Target = Parameters<IPrimitivePaneRenderer["draw"]>[0];
 
-export interface BandData { times: Float64Array; upper: Float64Array; lower: Float64Array; color: string; visible: boolean }
+export interface BandData { times: Float64Array; upper: Float64Array; lower: Float64Array; color: string; colorDown?: string; visible: boolean }
 
 function lowerBound(a: Float64Array, x: number): number {
   let lo = 0, hi = a.length;
@@ -41,10 +41,11 @@ export class BandPrimitive implements ISeriesPrimitive<Time> {
     const from = Math.max(0, lowerBound(data.times, (range.from as number) * 1000) - 1);
     const to = Math.min(data.times.length - 1, lowerBound(data.times, (range.to as number) * 1000) + 1);
     target.useBitmapCoordinateSpace(({ context: ctx, horizontalPixelRatio: hr, verticalPixelRatio: vr }) => {
-      ctx.fillStyle = data.color;
-      let run: { x: number; yu: number; yl: number }[] = [];
+      type Pt = { x: number; yu: number; yl: number };
+      let run: Pt[] = [], down = false;
       const flush = () => {
         if (run.length > 1) {
+          ctx.fillStyle = down && data.colorDown ? data.colorDown : data.color;
           ctx.beginPath();
           ctx.moveTo(run[0].x * hr, run[0].yu * vr);
           for (let i = 1; i < run.length; i++) ctx.lineTo(run[i].x * hr, run[i].yu * vr);
@@ -60,6 +61,15 @@ export class BandPrimitive implements ISeriesPrimitive<Time> {
         if (!Number.isFinite(u) || !Number.isFinite(l) || x === null) { flush(); continue; }
         const yu = series.priceToCoordinate(u), yl = series.priceToCoordinate(l);
         if (yu === null || yl === null) { flush(); continue; }
+        const isDown = !!data.colorDown && u < l, prev = run[run.length - 1];
+        if (prev && isDown !== down) {
+          const d0 = prev.yu - prev.yl, d1 = yu - yl, k = d0 === d1 ? 0 : d0 / (d0 - d1);
+          const cx = prev.x + (x - prev.x) * k, cy = prev.yu + (yu - prev.yu) * k;
+          run.push({ x: cx, yu: cy, yl: cy });
+          flush();
+          run.push({ x: cx, yu: cy, yl: cy });
+        }
+        down = isDown;
         run.push({ x, yu, yl });
       }
       flush();

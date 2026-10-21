@@ -30,9 +30,19 @@ function mergeTail(f: IndicatorFrame, t: TailFrame): boolean {
   };
   const write = (dst: Float64Array, tail: number[]) => { for (let k = 0; k < tail.length; k++) dst[t.n - tail.length + k] = tail[k]; };
   const times = (a: Float64Array) => { const g = grow(a); write(g, t.times); return g; };
-  f.plots.forEach((p, i) => { p.times = times(p.times); p.values = grow(p.values); write(p.values, t.plots[i] ?? []); });
+  f.plots.forEach((p, i) => {
+    p.times = times(p.times); p.values = grow(p.values); write(p.values, t.plots[i] ?? []);
+    const x = t.extras?.[i];
+    if (!x) return;
+    if (p.colors && x.colors) { p.colors = grow(p.colors); write(p.colors, x.colors); }
+    if (p.open && x.open) { p.open = grow(p.open); write(p.open, x.open); }
+    if (p.high && x.high) { p.high = grow(p.high); write(p.high, x.high); }
+    if (p.low && x.low) { p.low = grow(p.low); write(p.low, x.low); }
+  });
   f.bands.forEach((b, i) => { b.times = times(b.times); b.upper = grow(b.upper); b.lower = grow(b.lower); write(b.upper, t.bands[i]?.upper ?? []); write(b.lower, t.bands[i]?.lower ?? []); });
   f.shapes = t.shapes; f.bgcolors = t.bgcolors;
+  if (t.barcolors) f.barcolors = t.barcolors;
+  if (t.drawings) f.drawings = t.drawings;
   return true;
 }
 
@@ -135,8 +145,9 @@ export function useIndicators(engine: IndicatorEngine | undefined, symbol: strin
     const f = frames.current.get(id);
     if (!f || frameKeys.current.get(id) === key) return f;
     const none = new Float64Array(0);
-    return { ...f, plots: f.plots.map((p) => ({ ...p, times: none, values: none })),
-             bands: f.bands.map((b) => ({ ...b, times: none, upper: none, lower: none })), shapes: [], bgcolors: [] };
+    return { ...f, plots: f.plots.map((p) => ({ ...p, times: none, values: none, ...(p.colors ? { colors: none } : {}), ...(p.open ? { open: none, high: none, low: none } : {}) })),
+             bands: f.bands.map((b) => ({ ...b, times: none, upper: none, lower: none })), shapes: [], bgcolors: [], barcolors: [],
+             drawings: f.drawings ? { lines: [], labels: [], boxes: [] } : undefined };
   }, []);
 
   const hasFrameFor = useCallback((id: string, key: string) => frames.current.has(id) && frameKeys.current.get(id) === key, []);

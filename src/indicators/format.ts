@@ -3,13 +3,14 @@ import { fmtNum, priceDecimals } from "../format";
 import type { StudyEntry } from "../types";
 import type { IndicatorConfig, IndicatorFrame, IndicatorInstance, IndicatorState, PlotFrame } from "./types";
 
-export function legendTitle(entry: StudyEntry, inst: IndicatorInstance, state: IndicatorState | undefined): { name: string; args: string } {
+export function legendTitle(entry: StudyEntry, inst: IndicatorInstance, state: IndicatorState | undefined,
+                            sourceLabel: (v: string) => string = (v) => v): { name: string; args: string } {
   const cfg = state?.config ?? {};
   const defs = state?.inputs ?? [];
   const pick = cfg.titleInputs
     ? defs.filter((d) => cfg.titleInputs!.includes(d.name))
     : defs.filter((d) => (d.type === "int" || d.type === "float" || d.type === "source" || d.type === "select") && d.group !== "Style" && d.group !== "Bands");
-  const args = pick.map((d) => String(inst.inputs[d.name] ?? d.default)).join(" ");
+  const args = pick.map((d) => { const v = String(inst.inputs[d.name] ?? d.default); return d.type === "source" && v.startsWith("@") ? sourceLabel(v) : v; }).join(" ");
   return { name: cfg.shortTitle ?? entry.shortTitle, args };
 }
 
@@ -55,6 +56,8 @@ export function formatValue(v: number, cfg: IndicatorConfig, precision: number):
 
 export function plotColorAt(p: PlotFrame, i: number, styleColor: { color?: string; colorUp?: string; colorDown?: string } | undefined,
                             candleUp: (t: number) => boolean | undefined): string {
+  if (p.palette && p.colors) { const k = p.colors[i]; if (Number.isInteger(k) && k >= 0 && k < p.palette.length) return p.palette[k]; }
+  if ((p.style === "candle" || p.style === "bar") && p.open) return p.values[i] >= p.open[i] ? styleColor?.colorUp ?? p.colorUp ?? p.color : styleColor?.colorDown ?? p.colorDown ?? p.color;
   const up = styleColor?.colorUp ?? p.colorUp, down = styleColor?.colorDown ?? p.colorDown;
   if ((up || down) && (p.style === "histogram" || p.style === "columns" || p.style === "baseline")) {
     const v = p.values[i];

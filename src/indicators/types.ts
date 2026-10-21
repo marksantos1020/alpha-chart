@@ -21,14 +21,24 @@ export interface IndicatorInstance {
   overlay: boolean | null;
   intervals?: string[];
   paneHeight?: number;
+  mergeWith?: string;
+  scale?: "right" | "left" | "none";
+  scaleLabels?: boolean;
 }
 
 export interface PlotFrame {
   title: string; pane: number; style: string; color: string; width: number; lineStyle: string;
   colorUp?: string; colorDown?: string; colorBy?: string; baseValue?: number; display: string;
   times: Float64Array; values: Float64Array;
+  offset?: number; palette?: string[]; colors?: Float64Array;
+  open?: Float64Array; high?: Float64Array; low?: Float64Array; wickColor?: string;
 }
-export interface BandFrame { title: string; color: string; times: Float64Array; upper: Float64Array; lower: Float64Array }
+
+export interface DrawLine { id: number; x1: number; y1: number; x2: number; y2: number; color: string; width: number; style: string; extend: string }
+export interface DrawLabel { id: number; x: number; y: number; text: string; color: string; textColor: string; style: string; size: string }
+export interface DrawBox { id: number; left: number; top: number; right: number; bottom: number; color: string; bgColor: string; width: number; style: string; text: string; textColor: string }
+export interface DrawFrame { lines: DrawLine[]; labels: DrawLabel[]; boxes: DrawBox[] }
+export interface BandFrame { title: string; color: string; times: Float64Array; upper: Float64Array; lower: Float64Array; offset?: number; colorDown?: string }
 export interface HLine { value: number; title?: string; color?: string; style?: string; width?: number; pane?: number }
 
 export interface IndicatorFrame {
@@ -37,6 +47,8 @@ export interface IndicatorFrame {
   hlines: HLine[];
   shapes: { time: number; shape: string; location: string; color: string; text?: string }[];
   bgcolors: { color: string; times: number[] }[];
+  barcolors?: { color: string; times: number[] }[];
+  drawings?: DrawFrame;
 }
 
 export interface TailFrame {
@@ -46,6 +58,9 @@ export interface TailFrame {
   bands: { upper: number[]; lower: number[] }[];
   shapes: IndicatorFrame["shapes"];
   bgcolors: IndicatorFrame["bgcolors"];
+  extras?: ({ colors?: number[]; open?: number[]; high?: number[]; low?: number[] } | null)[];
+  barcolors?: IndicatorFrame["barcolors"];
+  drawings?: DrawFrame;
 }
 
 export interface IndicatorState {

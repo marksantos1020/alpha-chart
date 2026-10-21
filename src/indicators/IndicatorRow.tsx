@@ -15,9 +15,15 @@ export interface IndicatorMenuActions {
   onMovePane: () => void;
   onMove: (dir: -1 | 1) => void;
   onReset: () => void;
+  merged?: boolean;
+  canMergeAbove?: boolean;
+  canMergeBelow?: boolean;
+  onMoveTo?: (to: "new" | "above" | "below") => void;
+  scale?: "right" | "left" | "none";
+  onScale?: (scale: "right" | "left" | "none") => void;
 }
 
-interface Props {
+interface Props extends Partial<Pick<IndicatorMenuActions, "merged" | "canMergeAbove" | "canMergeBelow" | "onMoveTo" | "scale" | "onScale">> {
   name: string;
   args: string;
   values: RowValue[];
@@ -48,8 +54,21 @@ export function IndicatorMenuItems({ p, act }: { p: IndicatorMenuActions; act: (
       <button onClick={act(p.onSettings)}>Settings…</button>
       <button onClick={act(p.onToggle)}>{p.visible ? "Hide" : "Show"}</button>
       <button onClick={act(p.onMovePane)}>{p.overlay ? "Move to new pane below" : "Move to price pane"}</button>
+      {p.merged && p.onMoveTo && <button onClick={act(() => p.onMoveTo!("new"))}>Move to its own pane</button>}
+      {p.canMergeAbove && p.onMoveTo && <button onClick={act(() => p.onMoveTo!("above"))}>Merge into pane above</button>}
+      {p.canMergeBelow && p.onMoveTo && <button onClick={act(() => p.onMoveTo!("below"))}>Merge into pane below</button>}
       {p.canMoveUp && <button onClick={act(() => p.onMove(-1))}>Move up</button>}
       {p.canMoveDown && <button onClick={act(() => p.onMove(1))}>Move down</button>}
+      {p.onScale && (
+        <>
+          <hr />
+          <div className="menu-label">Pin to scale</div>
+          {([["right", "Right scale"], ["left", "Left scale"], ["none", "No scale (full height)"]] as const).map(([k, label]) => (
+            <button key={k} role="menuitemradio" aria-checked={(p.scale ?? "right") === k} className={(p.scale ?? "right") === k ? "checked" : ""}
+                    onClick={act(() => p.onScale!(k))}>{label}</button>
+          ))}
+        </>
+      )}
       <button onClick={act(p.onDuplicate)}>Duplicate</button>
       <button onClick={act(p.onReset)}>Reset settings</button>
       <hr />

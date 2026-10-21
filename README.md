@@ -10,7 +10,11 @@ A TradingView-style trading chart for React, built on
   text notes and icons; cursors (cross, dot, arrow, eraser), magnet modes, favorites with a floating bar,
   undo/redo, lock, hide and remove menus
 - TradingView-style price axis: filled labels at the latest bar, outlined values of the last visible bar in history, countdown inside the price label
-- indicator panes, a legend with values under the crosshair, a settings dialog (inputs, style, visibility per interval), drag to reorder
+- indicator panes you can merge and split, pinning to the left, right or no price scale, a legend with values under the crosshair,
+  a settings dialog (inputs, style, visibility per interval), drag to reorder, and one indicator as another's source
+  (engines that set `indicatorSources`)
+- indicator frames can shift plots by bars (Ichimoku, Alligator), colour each bar from a palette, draw candles,
+  recolour the chart's bars, and carry lines, labels and boxes
 - an indicator picker with categories and favorites, indicator templates
 - range presets, go to date, typed intervals, log/percent scales, time zones, countdown to bar close
 - an autosaved layout and per-symbol drawings

@@ -75,6 +75,7 @@ export interface IndicatorEngine {
   accepts?(id: string): boolean;
   resolve?(id: string): Promise<StudyEntry>;
   extra?: { category: string; list(): Promise<StudyEntry[]>; empty: string; loading?: string };
+  indicatorSources?: boolean;
   connect(onMessage: (msg: EngineOut) => void): EngineConnection;
 }
 

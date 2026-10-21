@@ -184,6 +184,8 @@
 .ind-menu button, .tmpl-item { text-align: left; background: transparent; border: 0; color: var(--text); padding: 0 10px; min-height: 36px; border-radius: 6px; cursor: pointer; font: 14px var(--font); display: flex; align-items: center; }
 .ind-menu button:hover, .tmpl-item:hover:not(:disabled) { background: var(--btn-hover); }
 .ind-menu .danger { color: var(--sell); }
+.ind-menu .menu-label { padding: 6px 10px 2px; font: 600 11px var(--font); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.ind-menu button.checked::after { content: "✓"; margin-left: auto; padding-left: 16px; color: var(--blue); }
 .ind-menu hr, .tmpl-menu hr { border: 0; border-top: 1px solid var(--divider); margin: 6px -6px; }
 .legend-collapse { pointer-events: auto; width: 29px; height: 21px; margin-top: 4px; padding: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 80%, transparent); border: 1px solid var(--btn-active); color: var(--text); border-radius: 3px; cursor: pointer; }
 .legend-collapse:hover { background: var(--btn-hover); }

@@ -36,6 +36,7 @@ import { SelectionMarks } from "./selection";
 import SettingsDialog from "./indicators/SettingsDialog";
 import TemplatesMenu from "./indicators/TemplatesMenu";
 import { DrawingController, type Bars } from "./drawings/controller";
+import { timeToLogical } from "./drawings/geometry";
 import { useDrawings, type DrawingsStore } from "./drawings/useDrawings";
 import Toolbar from "./drawings/Toolbar";
 import FavoritesBar from "./drawings/FavoritesBar";
@@ -289,7 +290,18 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   useEffect(() => { drawCtl.current?.refresh(); }, [candles]);
   const candlesRef = useRef(candles);
   candlesRef.current = candles;
+  const barColors = useRef<{ map: Map<number, string>; sig: string }>({ map: new Map(), sig: "" });
+  const tint = <P extends object>(p: P, t: number): P => {
+    const c = barColors.current.map.get(t);
+    return c ? { ...p, color: c, wickColor: c, borderColor: c } : p;
+  };
   const mainData = useCallback((cs: Bar[]) => {
+    const pts = mainDataRaw(cs);
+    const kind = mainKind(settingsRef.current.barStyle);
+    if (!barColors.current.map.size || !(kind === "candle" || kind === "bar")) return pts;
+    return pts.map((p, i) => tint(p, cs[i].time));
+  }, []);
+  const mainDataRaw = (cs: Bar[]) => {
     const st = settingsRef.current.barStyle, kind = mainKind(st);
     if (st === "heikin") {
       const b = barsRef.current;
@@ -300,8 +312,12 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     if (kind === "candle" || kind === "bar") return cs.map(toBar);
     if (kind === "columns") return cs.map((c, i) => column(c, cs[i - 1]));
     return cs.map((c) => ({ time: Math.floor(c.time / 1000) as UTCTimestamp, value: c.close }));
-  }, []);
+  };
   const mainPoint = useCallback((cs: Bar[]) => {
+    const p = mainPointRaw(cs), kind = mainKind(settingsRef.current.barStyle);
+    return kind === "candle" || kind === "bar" ? tint(p, cs[cs.length - 1].time) : p;
+  }, []);
+  const mainPointRaw = (cs: Bar[]) => {
     const st = settingsRef.current.barStyle, kind = mainKind(st), n = cs.length, c = cs[n - 1];
     const time = Math.floor(c.time / 1000) as UTCTimestamp;
     if (st === "heikin") {
@@ -315,7 +331,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     if (kind === "candle" || kind === "bar") return toBar(c);
     if (kind === "columns") return column(c, cs[n - 2]);
     return { time, value: c.close };
-  }, []);
+  };
   const column = (c: Bar, prev: Bar | undefined) => {
     const s = settingsRef.current;
     return { time: Math.floor(c.time / 1000) as UTCTimestamp, value: c.close, color: c.close >= (prev?.close ?? c.open) ? s.upColor : s.downColor };
@@ -389,18 +405,23 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     const items: RenderItem[] = [];
     const paneOf = new Map<string, number>();
     let next = 1;
-    for (const inst of instances) {
+    const live = instances.map((inst) => {
       const entry = engineRef.current?.entry(inst.libraryId);
       const f = ind.frameFor(inst.id, `${symbolRef.current}:${intervalRef.current}`);
-      if (!entry || !f || f.plots.length === 0) continue;
+      if (!entry || !f || (f.plots.length === 0 && !f.drawings)) return null;
       const cfg = states[inst.id]?.config ?? {};
-      const overlay = inst.overlay ?? cfg.overlay ?? entry.overlay;
-      const pane = overlay ? 0 : next++;
-      paneOf.set(inst.id, pane);
+      return { inst, f, cfg, overlay: inst.overlay ?? cfg.overlay ?? entry.overlay };
+    }).filter((x): x is NonNullable<typeof x> => !!x);
+    const owners = new Set(live.filter((x) => !x.overlay && !x.inst.mergeWith).map((x) => x.inst.id));
+    const target = (x: (typeof live)[number]) => (x.inst.mergeWith && owners.has(x.inst.mergeWith) ? x.inst.mergeWith : null);
+    for (const x of live) if (!x.overlay && !target(x)) paneOf.set(x.inst.id, next++);
+    for (const x of live) paneOf.set(x.inst.id, x.overlay ? 0 : paneOf.get(target(x) ?? x.inst.id) ?? next++);
+    for (const { inst, f, cfg, overlay } of live) {
+      const pane = paneOf.get(inst.id)!;
       const prec = precisionFor(cfg, f, overlay, sp);
       const onInterval = !inst.intervals || inst.intervals.includes(intervalRef.current);
       items.push({ id: inst.id, visible: inst.visible && onInterval, frame: f, style: inst.style, priceFormat: priceFormatFor(cfg, prec),
-                   paneFor: () => (overlay ? 0 : pane) });
+                   paneFor: () => pane, scale: inst.scale, labels: inst.scaleLabels });
     }
     if (strategy && strategy.plots.length) {
       const base = next - 1;
@@ -419,21 +440,32 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     setPaneTops((old) => (old.length === tops.length && old.every((v, i) => v === tops[i]) ? old : tops));
   }, []);
 
+  const applyBarColors = (items: RenderItem[]) => {
+    const r = renderer.current, s = series.current;
+    if (!r || !s) return;
+    const next = r.barColors(items);
+    if (next.sig === barColors.current.sig) return;
+    barColors.current = next;
+    if (candlesRef.current.length) s.setData(mainData(candlesRef.current) as any);
+  };
   const raf = useRef(0);
   const syncAll = useCallback(() => {
     cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(() => {
       const r = renderer.current;
       if (!r) return;
-      r.sync(buildItems().items);
-      requestAnimationFrame(measurePanes);
+      const items = buildItems().items;
+      r.sync(items);
+      applyBarColors(items);
+      requestAnimationFrame(() => { measurePanes(); requestAnimationFrame(measurePanes); });
     });
   }, [buildItems, measurePanes]);
 
   events.current.onFull = () => syncAll();
   events.current.onTail = (id: string, times: number[]) => {
-    const it = buildItems().items.find((x) => x.id === id);
+    const items = buildItems().items, it = items.find((x) => x.id === id);
     if (it) renderer.current?.tail(it, times);
+    if (it?.frame?.barcolors?.length) applyBarColors(items);
   };
 
   const applyMarks = useCallback(() => {
@@ -493,6 +525,11 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     chart.current = c; series.current = s; vol.current = v;
     const background = () => colorsRef.current?.bg ?? "#151b23";
     renderer.current = new IndicatorRenderer(c, background);
+    renderer.current.setTimeToX((t) => {
+      const ts = c.timeScale(), x0 = ts.logicalToCoordinate(0 as never), x1 = ts.logicalToCoordinate(1 as never);
+      if (x0 === null || x1 === null) return null;
+      return x0 + timeToLogical({ times: barsRef.current.times, barMs: intervalMsRef.current }, t) * (x1 - x0);
+    });
     renderer.current.setFront(() => series.current);
     renderer.current.setAfterBuild(applyMarks);
     renderer.current.setSelected(selRef.current);
@@ -617,6 +654,9 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
         axisLabels: () => priceLabels.current?.last ?? [],
         pricePrecision: () => (series.current!.options().priceFormat as { precision: number }).precision,
         colors: () => { const o = c.options(); return { grid: o.grid.vertLines.color, text: o.layout.textColor, border: o.rightPriceScale.borderColor }; },
+        tintedBars: () => series.current!.data().filter((d: any) => d.color).length,
+        leftScale: () => c.options().leftPriceScale.visible,
+        indicatorTypes: () => c.panes().flatMap((p, pane) => p.getSeries().filter((x) => x !== series.current && x !== v).map((x) => ({ pane, type: x.seriesType() }))),
         indicatorSeries: () => c.panes().flatMap((p, pane) => p.getSeries().filter((x) => x !== series.current && x !== v)
           .map((x) => ({ pane, times: x.data().filter((d: any) => d.value !== undefined).map((d: any) => d.time as number) }))),
       };
@@ -891,6 +931,22 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     return candles[candles.length - 1];
   }, [hoverTime, candles]);
 
+  const shortOf = (inst: IndicatorInstance) => ind.states[inst.id]?.config.shortTitle ?? engine?.entry(inst.libraryId)?.shortTitle ?? "Indicator";
+  const sourceLabel = (v: string) => {
+    const cut = v.indexOf(":"), inst = ind.instances.find((i) => i.id === v.slice(1, cut));
+    return inst ? `${shortOf(inst)}: ${v.slice(cut + 1)}` : "removed";
+  };
+  const sourceOptions = (id: string) => {
+    const dependsOn = (inst: IndicatorInstance, on: string, seen = new Set<string>()): boolean => {
+      if (seen.has(inst.id)) return false;
+      seen.add(inst.id);
+      return Object.values(inst.inputs).some((v) => typeof v === "string" && v.startsWith("@") && (v.startsWith(`@${on}:`) ||
+        ind.instances.some((o) => v.startsWith(`@${o.id}:`) && dependsOn(o, on, seen))));
+    };
+    return ind.instances.filter((o) => o.id !== id && !dependsOn(o, id)).flatMap((o) =>
+      (ind.frameFor(o.id, `${symbol}:${interval}`)?.plots ?? []).filter((p) => !p.open)
+        .map((p) => ({ value: `@${o.id}:${p.title}`, label: `${shortOf(o)}: ${p.title}` })));
+  };
   const rows = ind.instances.map((inst, k) => {
     const entry: StudyEntry = engine?.entry(inst.libraryId) ?? { id: inst.libraryId, name: "Loading…", shortTitle: engine?.accepts?.(inst.libraryId) ? "Script" : inst.libraryId,
                                                                overlay: true, category: "", description: "" };
@@ -902,15 +958,26 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     const values: RowValue[] = [];
     for (const p of f?.plots ?? []) {
       if (p.display === "pane" || p.display === "none" || inst.style[p.title]?.visible === false) continue;
-      const i = blank ? -1 : indexAt(p.times, hoverTime);
+      const at = blank ? -1 : indexAt(p.times, hoverTime);
+      const i = at >= 0 && p.offset ? (at - p.offset >= 0 && at - p.offset < p.values.length ? at - p.offset : -1) : at;
       const v = i >= 0 ? p.values[i] : NaN;
       values.push({ text: formatValue(v, cfg, prec), color: i >= 0 ? plotColorAt(p, i, inst.style[p.title], (t) => dirRef.current.get(t)) : p.color });
     }
-    const { name: title, args } = legendTitle(entry, inst, st);
+    const { name: title, args } = legendTitle(entry, inst, st, sourceLabel);
     return { inst, k, title, args, values, overlay, pane: paneOf.get(inst.id) ?? (overlay ? 0 : -1), error: st?.error ?? null };
   });
 
+  const paneOwners = [...new Set(rows.filter((r) => r.pane > 0).map((r) => r.pane))].sort((a, b) => a - b)
+    .map((pane) => rows.find((r) => r.pane === pane && !r.inst.mergeWith) ?? rows.find((r) => r.pane === pane)!);
   const rowProps = (r: (typeof rows)[number]) => ({
+    merged: r.pane > 0 && paneOwners.find((o) => o.pane === r.pane)?.inst.id !== r.inst.id,
+    canMergeAbove: r.pane > 1, canMergeBelow: r.pane > 0 && paneOwners.some((o) => o.pane === r.pane + 1),
+    onMoveTo: (to: "new" | "above" | "below") => {
+      if (to === "new") { ind.update(r.inst.id, { mergeWith: undefined, overlay: false }); return; }
+      const owner = paneOwners.find((o) => o.pane === r.pane + (to === "above" ? -1 : 1));
+      if (owner) ind.update(r.inst.id, { mergeWith: owner.inst.id, overlay: false });
+    },
+    scale: r.inst.scale, onScale: (scale: "right" | "left" | "none") => ind.update(r.inst.id, { scale: scale === "right" ? undefined : scale }),
     name: r.title, args: settings.status.indicatorArgs ? r.args : "", values: settings.status.indicatorValues ? r.values : [], visible: r.inst.visible, error: r.error, overlay: r.overlay,
     onInterval: !r.inst.intervals || r.inst.intervals.includes(interval),
     loading: !r.error && (ind.pending.has(r.inst.id) || !ind.hasFrameFor(r.inst.id, `${symbol}:${interval}`)),
@@ -920,9 +987,9 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     onSettings: () => setEditing(r.inst.id),
     onRemove: () => ind.remove(r.inst.id),
     onDuplicate: () => ind.duplicate(r.inst.id),
-    onMovePane: () => ind.update(r.inst.id, { overlay: !r.overlay }),
+    onMovePane: () => ind.update(r.inst.id, { overlay: !r.overlay, mergeWith: undefined }),
     onMove: (d: -1 | 1) => ind.move(r.inst.id, d),
-    onReset: () => ind.update(r.inst.id, { inputs: {}, style: {}, overlay: null }),
+    onReset: () => ind.update(r.inst.id, { inputs: {}, style: {}, overlay: null, mergeWith: undefined, scale: undefined, scaleLabels: undefined }),
     onSource: onIndicatorSource ? () => onIndicatorSource(r.inst.libraryId) : undefined,
     selected: selected === r.inst.id,
     onSelect: () => select(r.inst.id),
@@ -1004,9 +1071,9 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
             )}
           </div>
         )}
-        {rows.filter((r) => r.pane > 0).map((r) => (
-          <div key={r.inst.id} className="legend-stack" style={{ top: (paneTops[r.pane] ?? 0) + 4 }}>
-            <IndicatorRow {...rowProps(r)} />
+        {paneOwners.map((o) => (
+          <div key={o.inst.id} className="legend-stack" style={{ top: (paneTops[o.pane] ?? 0) + 4 }}>
+            {rows.filter((r) => r.pane === o.pane).map((r) => <IndicatorRow key={r.inst.id} {...rowProps(r)} />)}
           </div>
         ))}
         {typed && (
@@ -1073,7 +1140,8 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       {editingInst && (
         <SettingsDialog instance={editingInst} state={ind.states[editingInst.id]} frame={ind.frameFor(editingInst.id, `${symbol}:${interval}`)}
                         title={engine?.entry(editingInst.libraryId)?.name ?? "Indicator"}
-                        onChange={(patch) => ind.update(editingInst.id, patch)} onClose={() => setEditing(null)} />
+                        onChange={(patch) => ind.update(editingInst.id, patch)} onClose={() => setEditing(null)}
+                        sources={engine?.indicatorSources ? sourceOptions(editingInst.id) : undefined} />
       )}
     </div>
   );
