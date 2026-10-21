@@ -165,12 +165,13 @@
 .legend-stack:has(.menu-open) { z-index: 25; }
 .legend-stack .legend { position: static; pointer-events: none; flex-wrap: wrap; row-gap: 2px; }
 .legend .sym { color: var(--text); font-size: 16px; font-weight: 400; margin-right: 4px; }
-.ind-row { display: flex; align-items: center; gap: 6px; min-height: 26px; margin-left: -5px; padding-left: 4px; font-size: 13px; color: var(--muted); pointer-events: auto; width: fit-content; position: relative; border: 1px solid transparent; border-radius: 4px; }
+.ind-row { display: flex; align-items: center; gap: 6px; min-height: 26px; margin-left: -5px; padding-left: 4px; font-size: 13px; color: var(--muted); pointer-events: auto; width: fit-content; max-width: 100%; box-sizing: border-box; position: relative; border: 1px solid transparent; border-radius: 4px; }
 .ind-row:hover, .ind-row.menu-open, .ind-row.selected { background: var(--bg); border-color: var(--btn-active); }
 .ind-row.selected { border-color: var(--blue); }
 .ind-row:hover .ind-val, .ind-row.menu-open .ind-val, .ind-row.selected .ind-val { display: none; }
 .ind-row.hidden .ind-title { opacity: 0.45; }
-.ind-title { color: var(--text); cursor: default; white-space: nowrap; user-select: none; }
+.ind-title { color: var(--text); cursor: default; white-space: nowrap; user-select: none; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ind-row > :not(.ind-title):not(.ind-error):not(.ind-menu) { flex: none; }
 .ind-args { color: var(--muted); }
 .ind-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ind-error { color: var(--sell); max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -116,7 +116,7 @@ export default function IndicatorRow(p: Props) {
          onDragOver={(e) => { if (p.onDropOn && e.dataTransfer.types.includes("text/x-indicator")) { e.preventDefault(); e.currentTarget.classList.add("drop"); } }}
          onDragLeave={(e) => e.currentTarget.classList.remove("drop")}
          onDrop={(e) => { e.currentTarget.classList.remove("drop"); const id = e.dataTransfer.getData("text/x-indicator"); if (id && id !== p.dragId) p.onDropOn?.(id); }}>
-      <span className="ind-title" onClick={p.onSelect} onDoubleClick={p.onSettings} title="Double-click for settings · drag to reorder">
+      <span className="ind-title" onClick={p.onSelect} onDoubleClick={p.onSettings} title={`${p.name}${p.args ? ` ${p.args}` : ""}\nDouble-click for settings · drag to reorder`}>
         {p.name}{p.args && <span className="ind-args"> {p.args}</span>}
       </span>
       {p.error ? <span className="ind-error" title={p.error}>error: {p.error}</span>
