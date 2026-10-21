@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChartStorage } from "../types";
-import type { Drawing, DrawingsDoc, ToolId } from "./types";
+import type { CursorKind, Drawing, DrawingsDoc, ToolId } from "./types";
 
 const LOCAL = (symbol: string) => `alpha.chart.drawings.v2.${symbol}`;
 const PREFS = "alpha.chart.drawprefs.v1";
 const MAX_UNDO = 100;
 
-interface Prefs { magnet: "off" | "weak" | "strong"; stay: boolean; lockAll: boolean; hideAll: boolean }
+export interface Prefs {
+  magnet: "off" | "weak" | "strong"; magnetMode: "weak" | "strong"; stay: boolean; lockAll: boolean; hideAll: boolean;
+  cursor: CursorKind; favorites: ToolId[]; showFavorites: boolean; favPos: { x: number; y: number } | null; icon: string;
+  hideMode: "drawings" | "indicators" | "all"; recent: Record<string, ToolId>;
+}
+const DEFAULT_PREFS: Prefs = {
+  magnet: "off", magnetMode: "weak", stay: false, lockAll: false, hideAll: false,
+  cursor: "cross", favorites: [], showFavorites: true, favPos: null, icon: "😀", hideMode: "drawings", recent: {},
+};
 function loadPrefs(): Prefs {
-  try { return { magnet: "off", stay: false, lockAll: false, hideAll: false, ...JSON.parse(localStorage.getItem(PREFS) ?? "{}") }; }
-  catch { return { magnet: "off", stay: false, lockAll: false, hideAll: false }; }
+  try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS) ?? "{}") }; }
+  catch { return { ...DEFAULT_PREFS }; }
 }
 function readLocal(symbol: string): { items: Drawing[]; updated: number } {
   try {

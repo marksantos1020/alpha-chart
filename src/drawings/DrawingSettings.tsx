@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ColorField } from "../indicators/SettingsDialog";
 import { CloseIcon } from "../icons";
-import { TOOL_LABEL, type Drawing, type DrawingStyle, type FibLevel } from "./types";
+import { EXTEND_TYPES, FILL_TYPES, LEVEL_TYPES, PRICE_LINE_TYPES, TEXT_TYPES, TOOL_LABEL, type Drawing, type DrawingStyle, type FibLevel } from "./types";
 
 interface Props {
   drawing: Drawing;
@@ -17,9 +17,10 @@ export default function DrawingSettings({ drawing, onChange, onDone, onCancel, i
   const [original] = useState(() => structuredClone(drawing));
   const s = drawing.style;
   const set = (patch: Partial<DrawingStyle>) => onChange({ style: { ...s, ...patch } });
-  const hasText = drawing.type === "text";
-  const isFib = drawing.type === "fib" || drawing.type === "fibext";
-  const hasFill = drawing.type === "rect" || drawing.type === "channel" || isFib;
+  const hasText = TEXT_TYPES.has(drawing.type);
+  const isFib = LEVEL_TYPES.has(drawing.type);
+  const hasFill = FILL_TYPES.has(drawing.type) || isFib && drawing.type !== "fibtime" && drawing.type !== "fibcircles" && drawing.type !== "fibarcs";
+  const textual = hasText || drawing.type === "icon";
   const changed = () => JSON.stringify(original) !== JSON.stringify(drawing);
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export default function DrawingSettings({ drawing, onChange, onDone, onCancel, i
         <div className="modal-body">
           {tab === "style" && (
             <>
-              {drawing.type !== "text" && (
+              {drawing.type !== "text" && drawing.type !== "icon" && (
                 <div className="form-row style-row">
                   <label className="check"><span>Line</span></label>
                   <ColorField value={s.color} onChange={(c) => set({ color: c })} />
@@ -59,20 +60,20 @@ export default function DrawingSettings({ drawing, onChange, onDone, onCancel, i
                   <ColorField value={s.fill ?? "rgba(41,98,255,0.2)"} onChange={(c) => set({ fill: c })} />
                 </div>
               )}
-              {drawing.type === "trend" && (
+              {EXTEND_TYPES.has(drawing.type) && (
                 <div className="form-row">
                   <label className="check"><input type="checkbox" checked={!!s.extendLeft} onChange={(e) => set({ extendLeft: e.target.checked })} /><span>Extend left</span></label>
                   <label className="check"><input type="checkbox" checked={!!s.extendRight} onChange={(e) => set({ extendRight: e.target.checked })} /><span>Extend right</span></label>
                 </div>
               )}
-              {(drawing.type === "hline" || drawing.type === "hray" || drawing.type === "crossline") && (
+              {PRICE_LINE_TYPES.has(drawing.type) && (
                 <div className="form-row"><label className="check"><input type="checkbox" checked={s.showPrice !== false} onChange={(e) => set({ showPrice: e.target.checked })} /><span>Price label on scale</span></label></div>
               )}
               {isFib && (
                 <>
                   <div className="form-row">
                     <label className="check"><input type="checkbox" checked={s.showLabels !== false} onChange={(e) => set({ showLabels: e.target.checked })} /><span>Labels</span></label>
-                    <label className="check"><input type="checkbox" checked={!!s.extendRight} onChange={(e) => set({ extendRight: e.target.checked })} /><span>Extend right</span></label>
+                    {["fib", "fibext", "fibchannel"].includes(drawing.type) && <label className="check"><input type="checkbox" checked={!!s.extendRight} onChange={(e) => set({ extendRight: e.target.checked })} /><span>Extend right</span></label>}
                     {drawing.type === "fib" && <label className="check"><input type="checkbox" checked={!!s.reverse} onChange={(e) => set({ reverse: e.target.checked })} /><span>Reverse</span></label>}
                   </div>
                   <h4>Levels</h4>
@@ -87,12 +88,15 @@ export default function DrawingSettings({ drawing, onChange, onDone, onCancel, i
                   </div>
                 </>
               )}
-              {drawing.type === "text" && (
+              {drawing.type === "gannfan" && (
+                <div className="form-row"><label className="check"><input type="checkbox" checked={s.showLabels !== false} onChange={(e) => set({ showLabels: e.target.checked })} /><span>Labels</span></label></div>
+              )}
+              {textual && (
                 <div className="form-row style-row">
-                  <label className="check"><span>Text colour</span></label>
-                  <ColorField value={s.textColor ?? s.color} onChange={(c) => set({ textColor: c, color: c })} />
+                  <label className="check"><span>{drawing.type === "icon" ? "Size" : "Text colour"}</span></label>
+                  {drawing.type !== "icon" && <ColorField value={s.textColor ?? s.color} onChange={(c) => set(drawing.type === "text" ? { textColor: c, color: c } : { textColor: c })} />}
                   <select value={s.fontSize ?? 14} onChange={(e) => set({ fontSize: +e.target.value })} title="Font size">
-                    {[10, 11, 12, 14, 16, 20, 24, 28, 32, 40].map((f) => <option key={f} value={f}>{f}</option>)}
+                    {(drawing.type === "icon" ? [16, 20, 24, 28, 36, 48, 64] : [10, 11, 12, 14, 16, 20, 24, 28, 32, 40]).map((f) => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </div>
               )}

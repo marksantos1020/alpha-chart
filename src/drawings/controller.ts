@@ -1,12 +1,14 @@
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { fmtNum } from "../format";
-import { hitTest, logicalToTime, snapAngle, snapTime, timeToLogical, type Pt, type Timeline } from "./geometry";
-import { DrawingLayer, textWidth, type MeasureInfo } from "./layer";
-import { ANCHORS, defaultStyle, type Anchor, type Drawing, type DrawingType, type ToolId } from "./types";
+import { logicalToTime, snapAngle, snapTime, timeToLogical, type Bars, type Pt, type Timeline } from "./geometry";
+import { DrawingLayer, type MeasureInfo } from "./layer";
+import { hitTest, moveHandle } from "./paint";
+import { SHORTCUTS } from "./tools";
+import { ANCHORS, ANGLE_SNAP_TYPES, defaultStyle, FREEHAND, OPEN, TEXT_TYPES, type Anchor, type Drawing, type DrawingType } from "./types";
 import type { DrawingsStore } from "./useDrawings";
 import { uid } from "../uid";
 
-export interface Bars { times: number[]; open: number[]; high: number[]; low: number[]; close: number[]; volume: number[] }
+export type { Bars };
 
 export interface ControllerHost {
   chart: IChartApi;
@@ -31,7 +33,6 @@ type Mode =
   | { kind: "zooming"; a: Anchor; b: Anchor };
 
 const MAGNET_PX = 12;
-const SHORTCUTS: Record<string, ToolId> = { t: "trend", h: "hline", v: "vline", f: "fib", c: "crossline", r: "rect" };
 
 export class DrawingController {
   readonly layer: DrawingLayer;
@@ -40,6 +41,7 @@ export class DrawingController {
   private preview: Drawing | null = null;
   private measure: MeasureInfo | null = null;
   private inside = false;
+  private finishedAt = 0;
   private off: (() => void)[] = [];
 
   constructor(private h: ControllerHost) {
@@ -52,6 +54,8 @@ export class DrawingController {
       measure: () => self.measure,
       hideAll: () => self.h.store().prefsRef.current.hideAll,
       timeline: () => self.h.timeline(),
+      bars: () => self.h.bars(),
+      volumeUnit: () => self.h.volumeUnit?.() ?? "",
       formatPrice: (p) => self.h.series.priceFormatter().format(p),
       pointerInside: () => self.inside,
     });
@@ -134,7 +138,7 @@ export class DrawingController {
   private hit(p: Pt, w: number, h: number) {
     const s = this.h.store();
     if (s.prefsRef.current.hideAll) return null;
-    return hitTest(s.ref.current, p, this.toPx, w, h, s.selRef.current, textWidth);
+    return hitTest(s.ref.current, p, this.layer.env(w, h), s.selRef.current);
   }
 
   private swallow(e: Event) { e.preventDefault(); e.stopPropagation(); }
@@ -160,6 +164,13 @@ export class DrawingController {
       const m = this.mode;
       const a = this.anchorAt(this.shiftSnap(m, loc.p, e.shiftKey), { magnet: !e.ctrlKey });
       if (!a) return;
+      if (ANCHORS[m.d.type] === OPEN) {
+        const last = this.toPx(m.d.anchors[m.placed - 1]);
+        if (Math.hypot(last.x - loc.p.x, last.y - loc.p.y) <= 4) { if (m.placed >= 2) this.finishOpen(m); }
+        else { m.d.anchors[m.placed] = a; m.placed += 1; m.d.anchors.push({ ...a }); }
+        this.swallow(e); this.refresh();
+        return;
+      }
       m.d.anchors[m.placed] = a;
       m.placed += 1;
       if (m.placed >= ANCHORS[m.d.type]) this.finish(m.d);
@@ -181,6 +192,13 @@ export class DrawingController {
       if (!a) return;
       this.mode = { kind: "zooming", a, b: a };
       this.swallow(e);
+      return;
+    }
+    if (tool === "eraser") {
+      const hit = this.hit(loc.p, loc.w, loc.h);
+      const d = hit && s.ref.current.find((x) => x.id === hit.id);
+      if (d && !d.locked && !s.prefsRef.current.lockAll) { s.remove(d.id); this.hover = null; }
+      this.swallow(e); this.refresh();
       return;
     }
     if (tool !== "cursor") { this.startCreate(tool, loc.p, e); return; }
@@ -217,22 +235,38 @@ export class DrawingController {
   }
 
   private startCreate(tool: DrawingType, p: Pt, e: MouseEvent) {
-    const a = this.anchorAt(p, { magnet: !e.ctrlKey, snapBar: tool !== "brush" });
+    const need = ANCHORS[tool];
+    const a = this.anchorAt(p, { magnet: !e.ctrlKey, snapBar: need !== FREEHAND });
     if (!a) return;
     const d: Drawing = { id: uid(), type: tool, anchors: [a], style: defaultStyle(tool) };
+    if (tool === "icon") d.style.text = this.h.store().prefsRef.current.icon;
     this.swallow(e);
-    if (tool === "brush") { this.mode = { kind: "brushing", d }; this.preview = d; this.refresh(); return; }
-    const need = ANCHORS[tool];
+    if (need === FREEHAND) { this.mode = { kind: "brushing", d }; this.preview = d; this.refresh(); return; }
+    if (tool === "long" || tool === "short") { d.anchors = this.seedPosition(tool, a, p); this.finish(d); return; }
     if (need === 1) { this.finish(d); return; }
-    d.anchors = Array.from({ length: need }, () => ({ ...a }));
+    d.anchors = Array.from({ length: need === OPEN ? 2 : need }, () => ({ ...a }));
     this.mode = { kind: "creating", d, placed: 1, down: p, downTime: Date.now() };
     this.preview = d;
     this.refresh();
   }
 
+  private seedPosition(tool: "long" | "short", a: Anchor, p: Pt): Anchor[] {
+    const pane = this.h.chart.panes()[0]?.getHeight() ?? 400;
+    const up = this.h.series.coordinateToPrice(p.y - pane * 0.12), dn = this.h.series.coordinateToPrice(p.y + pane * 0.06);
+    const hi = up === null ? a.price * 1.03 : (up as number), lo = dn === null ? a.price * 0.985 : (dn as number);
+    const l = this.logicalAt(p.x) ?? 0, end = snapTime(this.h.timeline(), l + 24);
+    const target = tool === "long" ? hi : 2 * a.price - hi, stop = tool === "long" ? lo : 2 * a.price - lo;
+    return [a, { time: end, price: target }, { time: end, price: stop }];
+  }
+
+  private finishOpen(m: Extract<Mode, { kind: "creating" }>) {
+    const pts = m.d.anchors.slice(0, m.placed);
+    if (pts.length < 2) { this.cancel(); return; }
+    this.finish({ ...m.d, anchors: pts });
+  }
+
   private shiftSnap(m: Extract<Mode, { kind: "creating" }>, p: Pt, shift: boolean): Pt {
-    const lineLike = ["trend", "ray", "extended", "arrow"].includes(m.d.type);
-    if (!shift || !lineLike) return p;
+    if (!shift || !ANGLE_SNAP_TYPES.has(m.d.type)) return p;
     return snapAngle(this.toPx(m.d.anchors[m.placed - 1]), p);
   }
 
@@ -244,8 +278,9 @@ export class DrawingController {
     s.select(done.id);
     this.preview = null;
     this.mode = { kind: "idle" };
+    this.finishedAt = Date.now();
     if (!s.prefsRef.current.stay) s.setTool("cursor");
-    if (d.type === "text") this.h.editText(done.id);
+    if (TEXT_TYPES.has(d.type) && d.style.text) this.h.editText(done.id);
     this.refresh();
   }
 
@@ -285,7 +320,7 @@ export class DrawingController {
       case "dragAnchor": {
         const a = this.anchorAt(loc.p, { magnet: !e.ctrlKey });
         if (!a) return;
-        s.setItems(s.ref.current.map((d) => (d.id === m.id ? { ...d, anchors: d.anchors.map((x, i) => (i === m.index ? a : x)) } : d)));
+        s.setItems(s.ref.current.map((d) => (d.id === m.id ? { ...d, anchors: moveHandle(d, m.index, a) } : d)));
         this.refresh();
         return;
       }
@@ -312,7 +347,7 @@ export class DrawingController {
       }
       default: {
         if (!loc.inPlot) { if (this.hover) { this.hover = null; this.refresh(); } return; }
-        const hit = s.toolRef.current === "cursor" ? this.hit(loc.p, loc.w, loc.h) : null;
+        const hit = s.toolRef.current === "cursor" || s.toolRef.current === "eraser" ? this.hit(loc.p, loc.w, loc.h) : null;
         const id = hit?.id ?? null;
         if (id !== this.hover) { this.hover = id; this.refresh(); }
       }
@@ -355,8 +390,9 @@ export class DrawingController {
   }
 
   private onDbl(e: MouseEvent) {
+    if (this.mode.kind === "creating" && ANCHORS[this.mode.d.type] === OPEN) { this.finishOpen(this.mode); this.swallow(e); return; }
     const loc = this.local(e);
-    if (!loc?.inPlot || this.mode.kind !== "idle") return;
+    if (!loc?.inPlot || this.mode.kind !== "idle" || Date.now() - this.finishedAt < 500) return;
     const hit = this.hit(loc.p, loc.w, loc.h);
     if (!hit) return;
     const d = this.h.store().ref.current.find((x) => x.id === hit.id);
@@ -365,6 +401,7 @@ export class DrawingController {
   }
 
   private onContext(e: MouseEvent) {
+    if (this.mode.kind === "creating" && ANCHORS[this.mode.d.type] === OPEN) { this.finishOpen(this.mode); this.swallow(e); return; }
     if (this.mode.kind === "creating" || this.mode.kind === "brushing") { this.cancel(); this.swallow(e); return; }
     const loc = this.local(e);
     if (!loc?.inPlot) return;
@@ -380,6 +417,7 @@ export class DrawingController {
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable || t.closest(".cm-editor, .modal"))) return;
     const s = this.h.store();
+    if ((e.key === "Escape" || e.key === "Enter") && this.mode.kind === "creating" && ANCHORS[this.mode.d.type] === OPEN) { this.finishOpen(this.mode); return; }
     if (e.key === "Escape") {
       if (this.mode.kind !== "idle" || this.measure) { this.measure = null; this.cancel(); }
       else if (s.toolRef.current !== "cursor") s.setTool("cursor");
@@ -420,7 +458,12 @@ export class DrawingController {
 
   private updateCursor() {
     const s = this.h.store(), el = this.h.el;
-    el.classList.toggle("draw-pointer", !!this.hover && s.toolRef.current === "cursor");
-    el.classList.toggle("draw-tool", s.toolRef.current !== "cursor");
+    const tool = s.toolRef.current, cursor = s.prefsRef.current.cursor;
+    el.classList.toggle("draw-pointer", !!this.hover && tool === "cursor");
+    el.classList.toggle("draw-eraser", tool === "eraser");
+    el.classList.toggle("draw-erasing", tool === "eraser" && !!this.hover);
+    el.classList.toggle("draw-tool", tool !== "cursor" && tool !== "eraser");
+    el.classList.toggle("cursor-dot", tool === "cursor" && cursor === "dot");
+    el.classList.toggle("cursor-arrow", tool === "cursor" && cursor === "arrow");
   }
 }

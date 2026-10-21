@@ -1,8 +1,10 @@
-import type { Anchor, Drawing } from "./types";
+import type { Anchor } from "./types";
 
 export interface Pt { x: number; y: number }
 
 export interface Timeline { times: ArrayLike<number>; barMs: number }
+
+export interface Bars { times: number[]; open: number[]; high: number[]; low: number[]; close: number[]; volume: number[] }
 
 function lowerBound(a: ArrayLike<number>, x: number): number {
   let lo = 0, hi = a.length;
@@ -109,85 +111,40 @@ export function pointInPolygon(p: Pt, poly: Pt[]): boolean {
   return inside;
 }
 
-export const HIT_PX = 5;
-export const HANDLE_PX = 7;
-
-export interface Hit { id: string; handle: number | null }
-
-export function hitTest(drawings: Drawing[], p: Pt, toPx: (a: Anchor) => Pt, w: number, h: number,
-                        selectedId: string | null, measureText: (d: Drawing) => number): Hit | null {
-  const sel = selectedId ? drawings.find((d) => d.id === selectedId) : undefined;
-  if (sel && !sel.hidden) {
-    const pts = handlePoints(sel, toPx, w);
-    for (let i = pts.length - 1; i >= 0; i--) if (dist(p, pts[i]) <= HANDLE_PX) return { id: sel.id, handle: i };
-  }
-  for (let k = drawings.length - 1; k >= 0; k--) {
-    const d = drawings[k];
-    if (d.hidden) continue;
-    if (hitsDrawing(d, p, toPx, w, h, measureText)) return { id: d.id, handle: null };
-  }
-  return null;
+export function rayFrom(a: Pt, b: Pt, w: number, h: number): [Pt, Pt] {
+  return extendSegment(a, b, w, h, b.x < a.x, b.x >= a.x);
 }
 
-export function handlePoints(d: Drawing, toPx: (a: Anchor) => Pt, w: number): Pt[] {
-  const pts = d.anchors.map(toPx);
-  if (d.type === "hline") return [{ x: Math.max(12, Math.min(w - 12, pts[0].x)), y: pts[0].y }];
-  if (d.type === "brush") return [];
-  return pts;
+export function pitchforkOrigin(type: string, p: Pt[]): Pt {
+  const [a, b] = p;
+  if (type === "schiff") return { x: a.x, y: (a.y + b.y) / 2 };
+  if (type === "modschiff") return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  return a;
 }
 
-function hitsDrawing(d: Drawing, p: Pt, toPx: (a: Anchor) => Pt, w: number, h: number, measureText: (d: Drawing) => number): boolean {
-  const pts = d.anchors.map(toPx);
-  const near = (a: Pt, b: Pt) => distToSegment(p, a, b) <= HIT_PX;
-  switch (d.type) {
-    case "trend": case "arrow": {
-      const [a, b] = extendSegment(pts[0], pts[1], w, h, !!d.style.extendLeft, !!d.style.extendRight);
-      return near(a, b);
-    }
-    case "ray": { const [a, b] = extendSegment(pts[0], pts[1], w, h, false, true); return near(a, b); }
-    case "extended": { const [a, b] = extendSegment(pts[0], pts[1], w, h, true, true); return near(a, b); }
-    case "hline": return Math.abs(p.y - pts[0].y) <= HIT_PX;
-    case "hray": return Math.abs(p.y - pts[0].y) <= HIT_PX && p.x >= pts[0].x - HIT_PX;
-    case "vline": return Math.abs(p.x - pts[0].x) <= HIT_PX;
-    case "crossline": return Math.abs(p.x - pts[0].x) <= HIT_PX || Math.abs(p.y - pts[0].y) <= HIT_PX;
-    case "rect": {
-      const x0 = Math.min(pts[0].x, pts[1].x), x1 = Math.max(pts[0].x, pts[1].x), y0 = Math.min(pts[0].y, pts[1].y), y1 = Math.max(pts[0].y, pts[1].y);
-      const inside = p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
-      const onEdge = inside && (p.x - x0 <= HIT_PX || x1 - p.x <= HIT_PX || p.y - y0 <= HIT_PX || y1 - p.y <= HIT_PX);
-      return onEdge || (inside && !!d.style.fillVisible);
-    }
-    case "channel": {
-      if (pts.length < 3) return near(pts[0], pts[1] ?? pts[0]);
-      const off = channelOffset(pts);
-      const a2 = { x: pts[0].x, y: pts[0].y + off }, b2 = { x: pts[1].x, y: pts[1].y + off };
-      return near(pts[0], pts[1]) || near(a2, b2) || (!!d.style.fillVisible && pointInPolygon(p, [pts[0], pts[1], b2, a2]));
-    }
-    case "fib": case "fibext": {
-      const xs = d.type === "fib" ? [pts[0].x, pts[1].x] : [pts[2]?.x ?? pts[1].x, (pts[2]?.x ?? pts[1].x) + Math.abs(pts[1].x - pts[0].x)];
-      const x0 = Math.min(...xs), x1 = d.style.extendRight ? w : Math.max(...xs);
-      if (p.x < x0 - HIT_PX || p.x > x1 + HIT_PX) return d.type === "fibext" && near(pts[0], pts[1]);
-      const ys = (d.style.levels ?? []).filter((l) => l.visible).map((l) => l.value);
-      for (const lv of ys) {
-        const price = d.type === "fib" ? fibPrice(d.anchors, lv, d.style.reverse) : fibExtPrice(d.anchors, lv);
-        const y = toPx({ time: d.anchors[0].time, price }).y;
-        if (Math.abs(p.y - y) <= HIT_PX) return true;
-      }
-      if (d.type === "fibext" && (near(pts[0], pts[1]) || (pts[2] && near(pts[1], pts[2])))) return true;
-      if (ys.length && d.style.fillVisible) {
-        const prices = ys.map((lv) => (d.type === "fib" ? fibPrice(d.anchors, lv, d.style.reverse) : fibExtPrice(d.anchors, lv)));
-        const yA = toPx({ time: d.anchors[0].time, price: Math.max(...prices) }).y, yB = toPx({ time: d.anchors[0].time, price: Math.min(...prices) }).y;
-        return p.y >= Math.min(yA, yB) && p.y <= Math.max(yA, yB);
-      }
-      return false;
-    }
-    case "brush":
-      for (let i = 1; i < pts.length; i++) if (near(pts[i - 1], pts[i])) return true;
-      return false;
-    case "text": {
-      const fs = d.style.fontSize ?? 14, wpx = measureText(d);
-      const lines = (d.style.text ?? "").split("\n").length;
-      return p.x >= pts[0].x - 2 && p.x <= pts[0].x + wpx + 2 && p.y >= pts[0].y - 2 && p.y <= pts[0].y + lines * fs * 1.25 + 2;
-    }
+export interface Regression { from: number; to: number; at: (l: number) => number; dev: number; n: number }
+
+export function regression(tl: Timeline, bars: Bars, t0: number, t1: number, devs = 2): Regression | null {
+  const la = timeToLogical(tl, Math.min(t0, t1)), lb = timeToLogical(tl, Math.max(t0, t1));
+  const i0 = Math.max(0, Math.ceil(la - 1e-9)), i1 = Math.min(bars.close.length - 1, Math.floor(lb + 1e-9));
+  const n = i1 - i0 + 1;
+  if (n < 2) return null;
+  let sx = 0, sy = 0, sxx = 0, sxy = 0;
+  for (let i = i0; i <= i1; i++) { const y = bars.close[i]; sx += i; sy += y; sxx += i * i; sxy += i * y; }
+  const slope = (n * sxy - sx * sy) / (n * sxx - sx * sx), icpt = (sy - slope * sx) / n;
+  let ss = 0;
+  for (let i = i0; i <= i1; i++) { const r = bars.close[i] - (icpt + slope * i); ss += r * r; }
+  return { from: la, to: lb, at: (l) => icpt + slope * l, dev: devs * Math.sqrt(ss / n), n };
+}
+
+export function vwapFrom(tl: Timeline, bars: Bars, t: number): { time: number; price: number }[] {
+  const start = Math.max(0, Math.ceil(timeToLogical(tl, t) - 1e-9));
+  const out: { time: number; price: number }[] = [];
+  let pv = 0, v = 0, k = 0, sum = 0;
+  for (let i = start; i < bars.close.length; i++) {
+    const tp = (bars.high[i] + bars.low[i] + bars.close[i]) / 3, vol = bars.volume[i] || 0;
+    pv += tp * vol; v += vol; sum += tp; k++;
+    out.push({ time: bars.times[i], price: v > 0 ? pv / v : sum / k });
   }
-  return false;
+  return out;
 }

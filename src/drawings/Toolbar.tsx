@@ -1,37 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { TOOL_LABEL, type ToolId } from "./types";
 import type { DrawingsStore } from "./useDrawings";
-
-const I: Record<string, ReactNode> = {
-  cursor: <><path d="M9 2v14M2 9h14" /></>,
-  trend: <><path d="M3 15L15 3" /><circle cx="3" cy="15" r="1.6" /><circle cx="15" cy="3" r="1.6" /></>,
-  ray: <><path d="M3 15L16 2" /><circle cx="3" cy="15" r="1.6" /><circle cx="8" cy="10" r="1.6" /></>,
-  extended: <><path d="M1 17L17 1" /><circle cx="6" cy="12" r="1.6" /><circle cx="12" cy="6" r="1.6" /></>,
-  arrow: <><path d="M3 15L15 3M15 3h-6M15 3v6" /></>,
-  hline: <><path d="M1 9h16" /><circle cx="9" cy="9" r="1.6" /></>,
-  hray: <><path d="M5 9h12" /><circle cx="5" cy="9" r="1.6" /></>,
-  vline: <><path d="M9 1v16" /><circle cx="9" cy="9" r="1.6" /></>,
-  crossline: <><path d="M1 9h16M9 1v16" /></>,
-  channel: <><path d="M2 12L12 3M6 16L16 7" /></>,
-  rect: <><rect x="3" y="4" width="12" height="10" /></>,
-  fib: <><path d="M2 3h14M2 7h14M2 11h14M2 15h14" /></>,
-  fibext: <><path d="M2 15L7 6L11 11M9 3h7M9 8h7M9 13h7" /></>,
-  brush: <><path d="M2 14c3-1 3-6 6-6s2 5 5 5 3-3 3-5" /></>,
-  text: <><path d="M4 4h10M9 4v11M6.5 15h5" /></>,
-  measure: <><path d="M2 16L16 2M5 13l2 2M8 10l2 2M11 7l2 2" /></>,
-  zoom: <><circle cx="7.5" cy="7.5" r="5" /><path d="M11 11l5 5M5.5 7.5h4M7.5 5.5v4" /></>,
-  zoomout: <><circle cx="7.5" cy="7.5" r="5" /><path d="M11 11l5 5M5.5 7.5h4" /></>,
-  magnet: <><path d="M4 3v6a5 5 0 0 0 10 0V3M4 6h3M11 6h3" /></>,
-  stay: <><path d="M3 15L15 3" /><path d="M11 15h5M13.5 12.5v5" /></>,
-  lock: <><rect x="4" y="8" width="10" height="8" rx="1" /><path d="M6 8V5.5a3 3 0 0 1 6 0V8" /></>,
-  unlock: <><rect x="4" y="8" width="10" height="8" rx="1" /><path d="M6 8V5.5a3 3 0 0 1 6-.5" /></>,
-  eye: <><path d="M1 9s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5z" /><circle cx="9" cy="9" r="2.2" /></>,
-  eyeoff: <><path d="M1 9s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5z" /><path d="M2 2l14 14" /></>,
-  trash: <><path d="M3 5h12M7 5V3h4v2M5 5l1 11h6l1-11" /></>,
-};
-const Icon = ({ name }: { name: string }) => (
-  <svg width="28" height="28" viewBox="-5 -5 28 28" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">{I[name]}</svg>
-);
+import { CURSORS, GROUPS, HINT, ICONS } from "./tools";
+import { ToolIcon } from "./toolIcons";
 
 const Chevron = ({ up = false }: { up?: boolean }) => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -45,19 +16,26 @@ const MoreArrow = () => (
   </svg>
 );
 
-const GROUPS: { key: string; label: string; tools: ToolId[] }[] = [
-  { key: "lines", label: "Lines", tools: ["trend", "ray", "extended", "arrow", "hline", "hray", "vline", "crossline"] },
-  { key: "shapes", label: "Shapes", tools: ["channel", "rect"] },
-  { key: "fib", label: "Fibonacci", tools: ["fib", "fibext"] },
-  { key: "annot", label: "Annotations", tools: ["brush", "text"] },
-];
-const HINT: Partial<Record<ToolId, string>> = { trend: "Alt+T", hline: "Alt+H", vline: "Alt+V", fib: "Alt+F", crossline: "Alt+C", rect: "Alt+R", measure: "Shift+click" };
+export interface IndicatorControls { count: number; hidden: boolean; onHide: (hidden: boolean) => void; onRemove: () => void }
 
-interface Props { store: DrawingsStore; onTool: () => void; onZoomOut: () => void; count: number }
+interface Props { store: DrawingsStore; onTool: () => void; onZoomOut: () => void; count: number; indicators?: IndicatorControls }
 
-export default function Toolbar({ store, onTool, onZoomOut, count }: Props) {
+function Flyout({ label, top, left, wide, children }: { label: string; top: number; left: number; wide?: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [y, setY] = useState(top);
+  useLayoutEffect(() => {
+    const h = ref.current?.offsetHeight ?? 0;
+    setY(Math.max(8, Math.min(top, window.innerHeight - h - 8)));
+  }, [top]);
+  return <div ref={ref} className={`dt-flyout${wide ? " wide" : ""}`} role="menu" aria-label={label} style={{ position: "fixed", top: y, left }}>{children}</div>;
+}
+
+export default function Toolbar({ store, onTool, onZoomOut, count, indicators }: Props) {
   const [open, setOpen] = useState<{ key: string; top: number; left: number } | null>(null);
+  const [tip, setTip] = useState<{ text: string; hint?: string; top: number; left: number } | null>(null);
+  const tipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ up: false, down: false });
   const measure = useCallback(() => {
     const el = scroller.current;
@@ -80,8 +58,6 @@ export default function Toolbar({ store, onTool, onZoomOut, count }: Props) {
     setOpen(null);
     el.scrollBy({ top: dir * Math.max(68, el.clientHeight * 0.6), behavior: "smooth" });
   };
-  const [last, setLast] = useState<Record<string, ToolId>>(() => Object.fromEntries(GROUPS.map((g) => [g.key, g.tools[0]])));
-  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     const down = (e: PointerEvent) => { if (!(e.target as Element)?.closest?.(".dt-flyout, .dt-group.open .dt-more")) setOpen(null); };
@@ -99,80 +75,190 @@ export default function Toolbar({ store, onTool, onZoomOut, count }: Props) {
     };
   }, [open]);
   useEffect(() => setOpen(null), [store.tool]);
+  useEffect(() => () => { if (tipTimer.current) clearTimeout(tipTimer.current); }, []);
 
+  const hideTip = () => { if (tipTimer.current) clearTimeout(tipTimer.current); tipTimer.current = null; setTip(null); };
+  const onOver = (e: ReactMouseEvent) => {
+    const el = (e.target as Element).closest?.("[data-tip]") as HTMLElement | null;
+    if (!el || el.closest(".dt-flyout")) return;
+    hideTip();
+    tipTimer.current = setTimeout(() => {
+      const r = el.getBoundingClientRect(), bar = ref.current?.getBoundingClientRect();
+      setTip({ text: el.dataset.tip!, hint: el.dataset.hint, top: r.top + r.height / 2, left: (bar?.right ?? r.right) + 6 });
+    }, 450);
+  };
+
+  const p = store.prefs;
   const pick = (t: ToolId) => { store.setTool(store.tool === t && t !== "cursor" ? "cursor" : t); onTool(); };
-  const btn = (t: ToolId, extra?: ReactNode) => (
-    <button key={t} className={`dt-btn ${store.tool === t ? "on" : ""}`} title={`${TOOL_LABEL[t]}${HINT[t] ? ` (${HINT[t]})` : ""}`}
-            aria-label={TOOL_LABEL[t]} onClick={() => pick(t)}>
-      <Icon name={t} />{extra}
+  const choose = (t: ToolId, group?: string) => {
+    if (group) store.setPref("recent", { ...p.recent, [group]: t });
+    setOpen(null); store.setTool(t); onTool();
+  };
+  const toggleFav = (t: ToolId) => store.setPref("favorites", p.favorites.includes(t) ? p.favorites.filter((x) => x !== t) : [...p.favorites, t]);
+  const toggle = (key: string, target: HTMLElement) => {
+    hideTip();
+    const r = (target.parentElement as HTMLElement).getBoundingClientRect(), bar = ref.current?.getBoundingClientRect();
+    setOpen(open?.key === key ? null : { key, top: r.top, left: (bar?.right ?? r.right) + 4 });
+  };
+
+  const tipOf = (t: ToolId) => ({ "data-tip": TOOL_LABEL[t], "data-hint": HINT[t] });
+  const btn = (t: ToolId) => (
+    <button key={t} className={`dt-btn ${store.tool === t ? "on" : ""}`} aria-label={TOOL_LABEL[t]} {...tipOf(t)} onClick={() => pick(t)}>
+      <ToolIcon name={t} />
     </button>
   );
-  const magnetNext = { off: "weak", weak: "strong", strong: "off" } as const;
-  const p = store.prefs;
+  const group = (key: string, label: string, main: ReactNode, menu: () => ReactNode, wide = false) => (
+    <div className={`dt-group ${open?.key === key ? "open" : ""}`} key={key}>
+      {main}
+      <button className="dt-more" aria-label={label} data-tip={label} aria-haspopup="menu" aria-expanded={open?.key === key}
+              onClick={(e) => toggle(key, e.currentTarget)}><MoreArrow /></button>
+      {open?.key === key && <Flyout label={label} top={open.top} left={open.left} wide={wide}>{menu()}</Flyout>}
+    </div>
+  );
+  const item = (key: string, icon: ReactNode, label: string, on: boolean, act: () => void, extra?: ReactNode, disabled = false) => (
+    <div key={key} role="menuitem" aria-label={label} aria-disabled={disabled || undefined} tabIndex={-1} className={`dt-item ${on ? "on" : ""}`}
+         onClick={() => { if (!disabled) act(); }}
+         onKeyDown={(e) => { if (!disabled && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); act(); } }}>
+      {icon}<span>{label}</span>{extra}
+    </div>
+  );
+  const toolItem = (t: ToolId, g?: string) => {
+    const fav = p.favorites.includes(t);
+    return item(t, <ToolIcon name={t} />, TOOL_LABEL[t], store.tool === t, () => choose(t, g), <>
+      {HINT[t] && <kbd>{HINT[t]}</kbd>}
+      <button className={`dt-fav ${fav ? "on" : ""}`} aria-label={fav ? `Remove ${TOOL_LABEL[t]} from favorites` : `Add ${TOOL_LABEL[t]} to favorites`}
+              onClick={(e) => { e.stopPropagation(); toggleFav(t); }}><ToolIcon name={fav ? "star_on" : "star"} size={20} /></button>
+    </>);
+  };
+
+  const cursorShown = store.tool === "eraser" ? { label: "Eraser", icon: "eraser" } : CURSORS.find((c) => c.kind === p.cursor) ?? CURSORS[0];
+  const magnetOn = p.magnet !== "off";
+  const hidden = store.items.filter((d) => d.hidden).length;
+  const indHidden = !!indicators?.hidden;
+  const hide = (() => {
+    const mode = indicators ? p.hideMode : "drawings";
+    if (mode === "indicators") return { on: indHidden, label: indHidden ? "Show indicators" : "Hide indicators", act: () => indicators!.onHide(!indHidden) };
+    if (mode === "all") {
+      const all = p.hideAll && indHidden;
+      return { on: all, label: all ? "Show drawings & indicators" : "Hide drawings & indicators", act: () => { store.setPref("hideAll", !all); indicators!.onHide(!all); onTool(); } };
+    }
+    const showHidden = !p.hideAll && hidden > 0;
+    return {
+      on: p.hideAll || showHidden, badge: showHidden ? hidden : undefined,
+      label: p.hideAll ? "Show all drawings" : showHidden ? `Show ${hidden} hidden drawing${hidden > 1 ? "s" : ""}` : "Hide all drawings",
+      act: () => {
+        if (showHidden) { const before = store.ref.current; store.setItems(before.map((d) => (d.hidden ? { ...d, hidden: false } : d)), before); }
+        else store.setPref("hideAll", !p.hideAll);
+        onTool();
+      },
+    };
+  })();
+  const setHide = (mode: "drawings" | "indicators" | "all") => {
+    setOpen(null);
+    store.setPref("hideMode", mode);
+    if (mode !== "indicators") store.setPref("hideAll", true);
+    if (mode !== "drawings") indicators?.onHide(true);
+    onTool();
+  };
+  const removeDrawings = () => { if (count > 0 && window.confirm(`Remove all ${count} drawings on this symbol?`)) { store.removeAll(); onTool(); } };
+  const removeIndicators = () => { if (indicators && indicators.count > 0 && window.confirm(`Remove all ${indicators.count} indicators?`)) indicators.onRemove(); };
 
   return (
-    <div className="draw-toolbar" ref={ref}>
-      {edges.up && <button className="dt-scroll-arrow up" title="Scroll up" aria-label="Scroll tools up" onClick={() => scrollBy(-1)}><Chevron up /></button>}
-      <div className="dt-scroll" ref={scroller} onScroll={() => { measure(); setOpen(null); }}>
+    <div className="draw-toolbar" ref={ref} onMouseOver={onOver} onMouseLeave={hideTip} onMouseDown={hideTip}>
+      {edges.up && <button className="dt-scroll-arrow up" aria-label="Scroll tools up" onClick={() => scrollBy(-1)}><Chevron up /></button>}
+      <div className="dt-scroll" ref={scroller} onScroll={() => { measure(); setOpen(null); hideTip(); }}>
       <div className="dt-column">
-      {btn("cursor")}
-      <span className="dt-sep" />
+      {group("cursors", "Cursors",
+        <button className={`dt-btn ${store.tool === "cursor" || store.tool === "eraser" ? "on" : ""}`} aria-label={cursorShown.label} data-tip={cursorShown.label}
+                onClick={() => { store.setTool(store.tool === "eraser" ? "eraser" : "cursor"); onTool(); }}><ToolIcon name={cursorShown.icon} /></button>,
+        () => <>
+          {CURSORS.map((c) => item(c.kind, <ToolIcon name={c.icon} />, c.label, store.tool === "cursor" && p.cursor === c.kind,
+                                   () => { store.setPref("cursor", c.kind); choose("cursor"); }))}
+          <hr />
+          {item("eraser", <ToolIcon name="eraser" />, "Eraser", store.tool === "eraser", () => choose("eraser"))}
+        </>)}
       {GROUPS.map((g) => {
-        const cur = g.tools.includes(store.tool) ? store.tool : last[g.key];
-        return (
-          <div className={`dt-group ${open?.key === g.key ? "open" : ""}`} key={g.key}>
-            <button className={`dt-btn ${g.tools.includes(store.tool) ? "on" : ""}`} title={`${TOOL_LABEL[cur]}${HINT[cur] ? ` (${HINT[cur]})` : ""}`}
-                    aria-label={TOOL_LABEL[cur]} onClick={() => pick(cur)}><Icon name={cur} /></button>
-            <button className="dt-more" title={g.label} aria-label={`${g.label} tools`} aria-haspopup="menu" aria-expanded={open?.key === g.key}
-                    onClick={(e) => {
-                      const r = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-                      const bar = ref.current?.getBoundingClientRect();
-                      setOpen(open?.key === g.key ? null : { key: g.key, top: r.top, left: (bar?.right ?? r.right) + 4 });
-                    }}><MoreArrow /></button>
-            {open?.key === g.key && (
-              <div className="dt-flyout" role="menu" aria-label={`${g.label} tools`} style={{ position: "fixed", top: Math.min(open.top, window.innerHeight - 40 * g.tools.length - 16), left: open.left }}>
-                {g.tools.map((t) => (
-                  <button key={t} role="menuitem" className={store.tool === t ? "on" : ""} onClick={() => { setLast((l) => ({ ...l, [g.key]: t })); setOpen(null); store.setTool(t); onTool(); }}>
-                    <Icon name={t} /><span>{TOOL_LABEL[t]}</span>{HINT[t] && <kbd>{HINT[t]}</kbd>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        );
+        const all = g.sections.flatMap((s) => s.tools);
+        const recent = p.recent[g.key];
+        const cur = all.includes(store.tool as never) ? store.tool : recent && all.includes(recent as never) ? recent : all[0];
+        return group(g.key, g.label,
+          <button className={`dt-btn ${all.includes(store.tool as never) ? "on" : ""}`} aria-label={TOOL_LABEL[cur]} {...tipOf(cur)} onClick={() => pick(cur)}>
+            <ToolIcon name={cur} />
+          </button>,
+          () => g.sections.map((s) => (
+            <div key={s.title} className="dt-section">
+              <div className="dt-section-title">{s.title}</div>
+              {s.tools.map((t) => toolItem(t, g.key))}
+            </div>
+          )));
       })}
+      {group("icons", "Icons",
+        <button className={`dt-btn ${store.tool === "icon" ? "on" : ""}`} aria-label="Icon" data-tip="Icon" onClick={() => pick("icon")}>
+          <span className="dt-emoji">{p.icon}</span>
+        </button>,
+        () => (
+          <div className="dt-emoji-grid">
+            {ICONS.map((e) => (
+              <button key={e} role="menuitem" className={p.icon === e && store.tool === "icon" ? "on" : ""} aria-label={`Icon ${e}`}
+                      onClick={() => { store.setPref("icon", e); choose("icon"); }}>{e}</button>
+            ))}
+          </div>
+        ), true)}
       <span className="dt-sep" />
       {btn("measure")}
       {btn("zoom")}
-      <button className="dt-btn" title="Zoom out" aria-label="Zoom out" onClick={onZoomOut}><Icon name="zoomout" /></button>
+      <button className="dt-btn" aria-label="Zoom out" data-tip="Zoom out" onClick={onZoomOut}><ToolIcon name="zoomout" /></button>
       <span className="dt-sep" />
-      <button className={`dt-btn ${p.magnet !== "off" ? "on" : ""}`} title={`Magnet: ${p.magnet} (snaps to open/high/low/close)`} aria-label="Magnet"
-              onClick={() => store.setPref("magnet", magnetNext[p.magnet])}>
-        <Icon name="magnet" />{p.magnet === "strong" && <i className="dt-badge">S</i>}
-      </button>
-      <button className={`dt-btn ${p.stay ? "on" : ""}`} title="Stay in drawing mode" aria-label="Stay in drawing mode" onClick={() => store.setPref("stay", !p.stay)}><Icon name="stay" /></button>
-      <button className={`dt-btn ${p.lockAll ? "on" : ""}`} title={p.lockAll ? "Unlock all drawings" : "Lock all drawings"} aria-label="Lock all drawings"
-              onClick={() => store.setPref("lockAll", !p.lockAll)}><Icon name={p.lockAll ? "lock" : "unlock"} /></button>
+      {group("magnet", "Magnet modes",
+        <button className={`dt-btn ${magnetOn ? "on" : ""}`} aria-label="Magnet" aria-pressed={magnetOn}
+                data-tip={magnetOn ? `${p.magnet === "strong" ? "Strong" : "Weak"} magnet` : "Magnet"} data-hint="Ctrl inverts while drawing"
+                onClick={() => store.setPref("magnet", magnetOn ? "off" : p.magnetMode)}><ToolIcon name={(magnetOn ? p.magnet : p.magnetMode) === "strong" ? "magnet_strong" : "magnet"} /></button>,
+        () => (["weak", "strong"] as const).map((m) => item(m, <ToolIcon name={m === "strong" ? "magnet_strong" : "magnet"} />,
+          m === "weak" ? "Weak magnet" : "Strong magnet", p.magnet === m, () => { setOpen(null); store.setPref("magnetMode", m); store.setPref("magnet", m); }))
+      )}
+      <button className={`dt-btn ${p.stay ? "on" : ""}`} aria-label="Stay in drawing mode" aria-pressed={p.stay} data-tip="Stay in drawing mode"
+              onClick={() => store.setPref("stay", !p.stay)}><ToolIcon name="stay" /></button>
+      <button className={`dt-btn ${p.lockAll ? "on" : ""}`} aria-label="Lock all drawings" aria-pressed={p.lockAll} data-tip={p.lockAll ? "Unlock all drawings" : "Lock all drawings"}
+              onClick={() => store.setPref("lockAll", !p.lockAll)}><ToolIcon name={p.lockAll ? "lock" : "unlock"} /></button>
       {(() => {
-        const hidden = store.items.filter((d) => d.hidden).length;
-        const showHidden = !p.hideAll && hidden > 0;
-        const title = p.hideAll ? "Show all drawings" : showHidden ? `Show ${hidden} hidden drawing${hidden > 1 ? "s" : ""}` : "Hide all drawings";
-        return (
-          <button className={`dt-btn ${p.hideAll || showHidden ? "on" : ""}`} title={title} aria-label={title}
-                  onClick={() => {
-                    if (showHidden) { const before = store.ref.current; store.setItems(before.map((d) => (d.hidden ? { ...d, hidden: false } : d)), before); }
-                    else store.setPref("hideAll", !p.hideAll);
-                    onTool();
-                  }}>
-            <Icon name={p.hideAll || showHidden ? "eyeoff" : "eye"} />{showHidden && <i className="dt-badge">{hidden}</i>}
+        const main = (
+          <button className={`dt-btn ${hide.on ? "on" : ""}`} aria-label={hide.label} data-tip={hide.label} onClick={hide.act}>
+            <ToolIcon name={hide.on ? "eyeoff" : "eye"} />{hide.badge !== undefined && <i className="dt-badge">{hide.badge}</i>}
           </button>
         );
+        if (!indicators) return main;
+        return group("hide", "Hide options", main, () => <>
+          {item("drawings", <ToolIcon name="eye" />, "Hide drawings", p.hideMode === "drawings", () => setHide("drawings"))}
+          {item("indicators", <ToolIcon name="hide_ind" />, "Hide indicators", p.hideMode === "indicators", () => setHide("indicators"))}
+          {item("all", <ToolIcon name="eyeoff" />, "Hide drawings & indicators", p.hideMode === "all", () => setHide("all"))}
+        </>);
       })()}
-      <button className="dt-btn" title="Remove all drawings" aria-label="Remove all drawings" disabled={count === 0}
-              onClick={() => { if (window.confirm(`Remove all ${count} drawings on this symbol?`)) { store.removeAll(); onTool(); } }}><Icon name="trash" /></button>
+      {(() => {
+        const main = (
+          <button className="dt-btn" aria-label="Remove all drawings" data-tip="Remove drawings" disabled={count === 0} onClick={removeDrawings}>
+            <ToolIcon name="trash" />
+          </button>
+        );
+        if (!indicators) return main;
+        return group("remove", "Remove options", main, () => <>
+          {item("drawings", <ToolIcon name="trash" />, `Remove ${count} drawing${count === 1 ? "" : "s"}`, false, () => { setOpen(null); removeDrawings(); }, undefined, count === 0)}
+          {item("indicators", <ToolIcon name="hide_ind" />, `Remove ${indicators.count} indicator${indicators.count === 1 ? "" : "s"}`, false, () => { setOpen(null); removeIndicators(); }, undefined, indicators.count === 0)}
+          {item("all", <ToolIcon name="trash" />, "Remove drawings & indicators", false, () => {
+            setOpen(null);
+            if (window.confirm(`Remove ${count} drawings and ${indicators.count} indicators?`)) { store.removeAll(); indicators.onRemove(); onTool(); }
+          }, undefined, count === 0 && indicators.count === 0)}
+        </>);
+      })()}
+      <span className="dt-sep" />
+      <button className={`dt-btn ${p.showFavorites && p.favorites.length ? "on" : ""}`} aria-label="Favorite drawing tools toolbar" aria-pressed={p.showFavorites}
+              data-tip={p.favorites.length ? `${p.showFavorites ? "Hide" : "Show"} favorite drawing tools toolbar` : "Star tools in the menus to add favorites"}
+              disabled={p.favorites.length === 0} onClick={() => store.setPref("showFavorites", !p.showFavorites)}><ToolIcon name="star" /></button>
       </div>
       </div>
-      {edges.down && <button className="dt-scroll-arrow down" title="Scroll down" aria-label="Scroll tools down" onClick={() => scrollBy(1)}><Chevron /></button>}
+      {edges.down && <button className="dt-scroll-arrow down" aria-label="Scroll tools down" onClick={() => scrollBy(1)}><Chevron /></button>}
+      {tip && !open && (
+        <div className="dt-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.text}{tip.hint && <kbd>{tip.hint}</kbd>}</div>
+      )}
     </div>
   );
 }

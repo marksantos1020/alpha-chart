@@ -5,7 +5,10 @@ A TradingView-style trading chart for React, built on
 
 - 12 chart types in a TradingView-style menu: bars, candles, hollow candles, line, line with markers, step line,
   area, HLC area, baseline, columns, high-low, Heikin Ashi
-- 14 drawing tools (trend lines, rays, channels, Fibonacci, measure, text, …) with magnet, undo/redo, lock/hide
+- a TradingView-style drawing toolbar with 57 tools in grouped menus: lines, channels, pitchforks, Fibonacci and Gann,
+  chart patterns and Elliott waves, cycles, long/short positions, anchored VWAP, range measurers, shapes, brushes,
+  text notes and icons; cursors (cross, dot, arrow, eraser), magnet modes, favorites with a floating bar,
+  undo/redo, lock, hide and remove menus
 - TradingView-style price axis: filled labels at the latest bar, outlined values of the last visible bar in history, countdown inside the price label
 - indicator panes, a legend with values under the crosshair, a settings dialog (inputs, style, visibility per interval), drag to reorder
 - an indicator picker with categories and favorites, indicator templates

@@ -2,8 +2,9 @@ import type {
   IChartApi, IPrimitivePaneRenderer, IPrimitivePaneView, ISeriesApi, ISeriesPrimitive, ISeriesPrimitiveAxisView,
   PrimitivePaneViewZOrder, SeriesAttachedParameter, SeriesType, Time,
 } from "lightweight-charts";
-import { placeMeasureLabel, type LabelRect, channelOffset, extendSegment, fibExtPrice, fibPrice, handlePoints, timeToLogical, type Pt, type Timeline } from "./geometry";
-import type { Anchor, Drawing } from "./types";
+import { placeMeasureLabel, timeToLogical, type Bars, type LabelRect, type Pt, type Timeline } from "./geometry";
+import { axisPrices, axisTimes, FONT, handlePoints, line, paint, textWidth, withAlpha, type Env } from "./paint";
+import { PRICE_LINE_TYPES, type Anchor, type Drawing } from "./types";
 import { formatTime } from "../settings";
 
 type Target = Parameters<IPrimitivePaneRenderer["draw"]>[0];
@@ -19,26 +20,13 @@ export interface LayerSource {
   measure(): MeasureInfo | null;
   hideAll(): boolean;
   timeline(): Timeline;
+  bars(): Bars;
+  volumeUnit(): string;
   formatPrice(p: number): string;
   pointerInside(): boolean;
 }
 
-const FONT = '"IBM Plex Sans", system-ui, sans-serif';
-let measureCtx: Ctx | null = null;
-export function textWidth(d: Drawing): number {
-  if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
-  if (!measureCtx) return 80;
-  measureCtx.font = `${d.style.fontSize ?? 14}px ${FONT}`;
-  return Math.max(...(d.style.text ?? "").split("\n").map((l) => measureCtx!.measureText(l).width), 8);
-}
-
-function setLine(ctx: Ctx, color: string, width: number, style: string) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineCap = style === "dotted" ? "round" : "butt";
-  ctx.setLineDash(style === "dashed" ? [6 + width, 4 + width] : style === "dotted" ? [0.5, 3 + width] : []);
-}
-function line(ctx: Ctx, a: Pt, b: Pt) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+export { textWidth, withAlpha };
 
 let labelZone = "UTC";
 export function setLabelZone(tz: string) { labelZone = tz; }
@@ -124,9 +112,9 @@ export class DrawingLayer implements ISeriesPrimitive<Time> {
       const selected = d.id === sel || d === this.src.preview();
       const priceOf = (a: Anchor) => { const y = this.series!.priceToCoordinate(a.price); if (y !== null) this.priceViews.push(new AxisLabel(y, this.src.formatPrice(a.price), d.style.color)); };
       const timeOf = (a: Anchor) => { const p = this.toPx(a); if (p) this.timeViews.push(new AxisLabel(p.x, utcLabel(a.time), d.style.color)); };
-      if ((d.type === "hline" || d.type === "hray" || d.type === "crossline") && d.style.showPrice !== false) priceOf(d.anchors[0]);
+      if (PRICE_LINE_TYPES.has(d.type) && d.style.showPrice !== false) priceOf(d.anchors[0]);
       if (d.type === "vline" || d.type === "crossline") timeOf(d.anchors[0]);
-      if (selected && d.type !== "brush") for (const a of d.anchors) { priceOf(a); if (d.type !== "hline" && d.type !== "hray") timeOf(a); }
+      if (selected && d.type !== "brush" && d.type !== "highlighter") for (const a of d.anchors) { if (axisPrices(d)) priceOf(a); if (axisTimes(d)) timeOf(a); }
     }
     const m = this.src.measure();
     if (m) {
@@ -142,21 +130,29 @@ export class DrawingLayer implements ISeriesPrimitive<Time> {
     }
   }
 
+  env(w: number, h: number): Env {
+    return {
+      toPx: (a) => this.toPx(a) ?? { x: -1e6, y: -1e6 }, w, h,
+      formatPrice: (p) => this.src.formatPrice(p), formatTime: utcLabel,
+      timeline: this.src.timeline(), bars: this.src.bars(), volumeUnit: this.src.volumeUnit(),
+    };
+  }
+
   private draw(target: Target) {
     if (!this.chart || !this.series) return;
     const hideAll = this.src.hideAll();
     target.useMediaCoordinateSpace(({ context: ctx, mediaSize }) => {
-      const w = mediaSize.width, h = mediaSize.height;
+      const w = mediaSize.width, h = mediaSize.height, env = this.env(w, h);
       const sel = this.src.selectedId(), hov = this.src.hoverId();
       if (!hideAll) {
-        for (const d of this.src.drawings()) if (!d.hidden) this.drawOne(ctx, d, w, h);
+        for (const d of this.src.drawings()) if (!d.hidden) paint(ctx, d, env);
         const pv = this.src.preview();
-        if (pv) this.drawOne(ctx, pv, w, h);
+        if (pv) paint(ctx, pv, env);
         for (const d of this.src.drawings()) {
           if (d.hidden || (d.id !== sel && d.id !== hov)) continue;
-          this.drawHandles(ctx, d, w, d.id === sel);
+          this.drawHandles(ctx, d, env, d.id === sel);
         }
-        if (pv) this.drawHandles(ctx, pv, w, true);
+        if (pv) this.drawHandles(ctx, pv, env, true);
       }
       const m = this.src.measure();
       this.lastMeasureLabel = null;
@@ -164,134 +160,22 @@ export class DrawingLayer implements ISeriesPrimitive<Time> {
     });
   }
 
-  private pts(d: Drawing): Pt[] | null {
-    const out: Pt[] = [];
-    for (const a of d.anchors) { const p = this.toPx(a); if (!p) return null; out.push(p); }
-    return out;
-  }
-
-  private drawOne(ctx: Ctx, d: Drawing, w: number, h: number) {
-    const pts = this.pts(d);
-    if (!pts || pts.length === 0) return;
-    const s = d.style;
-    ctx.save();
-    setLine(ctx, s.color, s.width, s.lineStyle);
-    switch (d.type) {
-      case "trend": case "arrow": case "ray": case "extended": {
-        if (pts.length < 2) break;
-        const left = d.type === "extended" || (d.type === "trend" && !!s.extendLeft);
-        const right = d.type === "extended" || d.type === "ray" || (d.type === "trend" && !!s.extendRight);
-        const [a, b] = extendSegment(pts[0], pts[1], w, h, left, right);
-        line(ctx, a, b);
-        if (d.type === "arrow") {
-          const ang = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x), L = 8 + 2 * s.width;
-          ctx.setLineDash([]);
-          ctx.beginPath();
-          ctx.moveTo(pts[1].x - L * Math.cos(ang - 0.45), pts[1].y - L * Math.sin(ang - 0.45));
-          ctx.lineTo(pts[1].x, pts[1].y);
-          ctx.lineTo(pts[1].x - L * Math.cos(ang + 0.45), pts[1].y - L * Math.sin(ang + 0.45));
-          ctx.stroke();
-        }
-        break;
-      }
-      case "hline": line(ctx, { x: 0, y: pts[0].y }, { x: w, y: pts[0].y }); break;
-      case "hray": line(ctx, pts[0], { x: w, y: pts[0].y }); break;
-      case "vline": line(ctx, { x: pts[0].x, y: 0 }, { x: pts[0].x, y: h }); break;
-      case "crossline":
-        line(ctx, { x: 0, y: pts[0].y }, { x: w, y: pts[0].y });
-        line(ctx, { x: pts[0].x, y: 0 }, { x: pts[0].x, y: h });
-        break;
-      case "rect": {
-        if (pts.length < 2) break;
-        const x = Math.min(pts[0].x, pts[1].x), y = Math.min(pts[0].y, pts[1].y), rw = Math.abs(pts[1].x - pts[0].x), rh = Math.abs(pts[1].y - pts[0].y);
-        if (s.fillVisible && s.fill) { ctx.fillStyle = s.fill; ctx.fillRect(x, y, rw, rh); }
-        ctx.strokeRect(x, y, rw, rh);
-        break;
-      }
-      case "channel": {
-        if (pts.length < 2) break;
-        line(ctx, pts[0], pts[1]);
-        if (pts.length < 3) break;
-        const off = channelOffset(pts);
-        const a2 = { x: pts[0].x, y: pts[0].y + off }, b2 = { x: pts[1].x, y: pts[1].y + off };
-        if (s.fillVisible && s.fill) {
-          ctx.fillStyle = s.fill;
-          ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); ctx.lineTo(pts[1].x, pts[1].y); ctx.lineTo(b2.x, b2.y); ctx.lineTo(a2.x, a2.y); ctx.closePath(); ctx.fill();
-        }
-        line(ctx, a2, b2);
-        setLine(ctx, s.color, 1, "dashed");
-        line(ctx, { x: pts[0].x, y: pts[0].y + off / 2 }, { x: pts[1].x, y: pts[1].y + off / 2 });
-        break;
-      }
-      case "fib": case "fibext": this.drawFib(ctx, d, pts, w); break;
-      case "brush":
-        if (pts.length < 2) break;
-        ctx.lineJoin = "round"; ctx.lineCap = "round"; ctx.setLineDash([]);
-        ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-        ctx.stroke();
-        break;
-      case "text": {
-        const fs = s.fontSize ?? 14;
-        ctx.font = `${fs}px ${FONT}`;
-        ctx.fillStyle = s.textColor ?? s.color;
-        ctx.textBaseline = "top";
-        (s.text ?? "").split("\n").forEach((l, i) => ctx.fillText(l, pts[0].x, pts[0].y + i * fs * 1.25));
-        break;
-      }
-    }
-    ctx.restore();
-  }
-
-  private drawFib(ctx: Ctx, d: Drawing, pts: Pt[], w: number) {
-    const s = d.style;
-    if (pts.length < 2) return;
-    if (d.type === "fibext" && pts.length < 3) { setLine(ctx, s.color, 1, "dashed"); line(ctx, pts[0], pts[1]); return; }
-    const x0 = d.type === "fib" ? Math.min(pts[0].x, pts[1].x) : pts[2].x;
-    const x1 = s.extendRight ? w : d.type === "fib" ? Math.max(pts[0].x, pts[1].x) : pts[2].x + Math.abs(pts[1].x - pts[0].x);
-    const levels = (s.levels ?? []).filter((l) => l.visible).slice().sort((a, b) => a.value - b.value);
-    const y = (lv: number) => this.series!.priceToCoordinate(d.type === "fib" ? fibPrice(d.anchors, lv, s.reverse) : fibExtPrice(d.anchors, lv)) ?? 0;
-    if (s.fillVisible) {
-      for (let i = 0; i + 1 < levels.length; i++) {
-        const ya = y(levels[i].value), yb = y(levels[i + 1].value);
-        ctx.fillStyle = withAlpha(levels[i + 1].color, 0.12);
-        ctx.fillRect(x0, Math.min(ya, yb), x1 - x0, Math.abs(yb - ya));
-      }
-    }
-    ctx.font = `11px ${FONT}`;
-    ctx.textBaseline = "bottom";
-    for (const lv of levels) {
-      const yy = y(lv.value);
-      setLine(ctx, lv.color, s.width, s.lineStyle);
-      line(ctx, { x: x0, y: yy }, { x: x1, y: yy });
-      if (s.showLabels !== false) {
-        const price = d.type === "fib" ? fibPrice(d.anchors, lv.value, s.reverse) : fibExtPrice(d.anchors, lv.value);
-        ctx.fillStyle = lv.color;
-        const label = `${lv.value} (${this.src.formatPrice(price)})`;
-        ctx.fillText(label, x0 - ctx.measureText(label).width - 4, yy + 5);
-      }
-    }
-    setLine(ctx, "#787B86", 1, "dashed");
-    line(ctx, pts[0], pts[1]);
-    if (d.type === "fibext") line(ctx, pts[1], pts[2]);
-  }
-
-  private drawHandles(ctx: Ctx, d: Drawing, w: number, selected: boolean) {
-    const pts = this.pts(d);
-    if (!pts) return;
+  private drawHandles(ctx: Ctx, d: Drawing, env: Env, selected: boolean) {
     ctx.save();
     ctx.setLineDash([]);
     if (d.type === "text") {
+      const p = env.toPx(d.anchors[0]);
       const fs = d.style.fontSize ?? 14, lines = (d.style.text ?? "").split("\n").length;
       ctx.strokeStyle = d.style.color; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
-      ctx.strokeRect(pts[0].x - 3, pts[0].y - 3, textWidth(d) + 6, lines * fs * 1.25 + 6);
+      ctx.strokeRect(p.x - 3, p.y - 3, textWidth(d) + 6, lines * fs * 1.25 + 6);
+      ctx.setLineDash([]);
     }
-    if (d.type === "brush" && selected) {
+    if ((d.type === "brush" || d.type === "highlighter") && selected) {
+      const pts = d.anchors.map(env.toPx);
       ctx.strokeStyle = withAlpha(d.style.color, 0.35); ctx.lineWidth = d.style.width + 6; ctx.lineJoin = "round"; ctx.lineCap = "round";
       ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke();
     }
-    const toPx = (a: Anchor) => this.toPx(a) ?? { x: -100, y: -100 };
-    for (const p of handlePoints(d, toPx, w)) {
+    for (const p of handlePoints(d, env)) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, selected ? 5 : 4, 0, Math.PI * 2);
       ctx.fillStyle = selected ? "#ffffff" : "rgba(255,255,255,0.7)";
@@ -335,12 +219,4 @@ export class DrawingLayer implements ISeriesPrimitive<Time> {
     m.lines.forEach((l, i) => ctx.fillText(l, bx + tw / 2, by + 4 + i * 16));
     ctx.restore();
   }
-}
-
-export function withAlpha(color: string, alpha: number): string {
-  const m = /^#([0-9a-f]{6})$/i.exec(color);
-  if (m) { const n = parseInt(m[1], 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`; }
-  const r = /^rgba?\(([^)]+)\)$/i.exec(color);
-  if (r) { const [x, y, z] = r[1].split(",").map((v) => v.trim()); return `rgba(${x},${y},${z},${alpha})`; }
-  return color;
 }

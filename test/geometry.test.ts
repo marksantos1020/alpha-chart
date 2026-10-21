@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import {
-  channelOffset, distToSegment, extendSegment, fibExtPrice, fibPrice, hitTest, logicalToTime, placeMeasureLabel, pointInPolygon,
+  channelOffset, distToSegment, extendSegment, fibExtPrice, fibPrice, logicalToTime, placeMeasureLabel, pointInPolygon,
   snapAngle, snapTime, timeToLogical, type Pt, type Timeline,
 } from "../src/drawings/geometry";
+import { handlePoints, hitTest, moveHandle, type Env } from "../src/drawings/paint";
 import { defaultStyle, type Drawing } from "../src/drawings/types";
 import { isSelectionBar, selectionStep } from "../src/selection";
 
@@ -11,6 +12,10 @@ const ok = (name: string, fn: () => void) => { fn(); n++; console.log(`ok  ${nam
 const close = (a: number, b: number, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
 
 const H = 3_600_000;
+const mkEnv = (toPx: Env["toPx"], w = 100, h = 100): Env => ({
+  toPx, w, h, formatPrice: (p) => p.toFixed(2), formatTime: String,
+  timeline: { times: [], barMs: 1 }, bars: { times: [], open: [], high: [], low: [], close: [], volume: [] },
+});
 const tl: Timeline = { times: [0, 15, 30, 45, 75, 90].map((m) => m * 60_000), barMs: 15 * 60_000 };
 
 ok("time -> logical on bars, between bars, across a gap, beyond both ends", () => {
@@ -73,14 +78,47 @@ ok("hit testing: handles of the selection first, then the topmost drawing", () =
   const rect: Drawing = { id: "r", type: "rect", anchors: [{ time: 40, price: 0 }, { time: 60, price: 40 }], style: defaultStyle("rect") };
   const hline: Drawing = { id: "h", type: "hline", anchors: [{ time: 0, price: 70 }], style: defaultStyle("hline") };
   const all = [line, rect, hline];
-  const tw = () => 40;
-  assert.deepEqual(hitTest(all, { x: 50, y: 10 }, toPx, 100, 100, null, tw), { id: "r", handle: null });
-  assert.deepEqual(hitTest(all, { x: 20, y: 12 }, toPx, 100, 100, null, tw), { id: "l", handle: null });
-  assert.deepEqual(hitTest(all, { x: 11, y: 11 }, toPx, 100, 100, "l", tw), { id: "l", handle: 0 });
-  assert.deepEqual(hitTest(all, { x: 5, y: 72 }, toPx, 100, 100, null, tw), { id: "h", handle: null });
-  assert.equal(hitTest(all, { x: 5, y: 50 }, toPx, 100, 100, null, tw), null);
+  const env = mkEnv(toPx);
+  assert.deepEqual(hitTest(all, { x: 50, y: 10 }, env, null), { id: "r", handle: null });
+  assert.deepEqual(hitTest(all, { x: 20, y: 12 }, env, null), { id: "l", handle: null });
+  assert.deepEqual(hitTest(all, { x: 11, y: 11 }, env, "l"), { id: "l", handle: 0 });
+  assert.deepEqual(hitTest(all, { x: 5, y: 72 }, env, null), { id: "h", handle: null });
+  assert.equal(hitTest(all, { x: 5, y: 50 }, env, null), null);
   hline.hidden = true;
-  assert.equal(hitTest(all, { x: 5, y: 72 }, toPx, 100, 100, null, tw), null);
+  assert.equal(hitTest(all, { x: 5, y: 72 }, env, null), null);
+});
+
+ok("hit testing follows what is painted: circles, closed shapes, patterns, positions and open paths", () => {
+  const toPx = (a: { time: number; price: number }): Pt => ({ x: a.time, y: a.price });
+  const env = mkEnv(toPx, 400, 400);
+  const mk = (id: string, type: Drawing["type"], pts: [number, number][]): Drawing => ({ id, type, anchors: pts.map(([time, price]) => ({ time, price })), style: defaultStyle(type) });
+  const circle = mk("c", "circle", [[100, 100], [140, 100]]);
+  assert.deepEqual(hitTest([circle], { x: 100, y: 141 }, env, null), { id: "c", handle: null });
+  assert.deepEqual(hitTest([circle], { x: 110, y: 100 }, env, null), { id: "c", handle: null });
+  circle.style.fillVisible = false;
+  assert.equal(hitTest([circle], { x: 110, y: 100 }, env, null), null);
+  const tri = mk("t", "triangle", [[10, 300], [90, 300], [50, 220]]);
+  assert.deepEqual(hitTest([tri], { x: 50, y: 280 }, env, null), { id: "t", handle: null });
+  assert.equal(hitTest([tri], { x: 5, y: 220 }, env, null), null);
+  const path = mk("p", "path", [[200, 200], [250, 250], [300, 200]]);
+  assert.deepEqual(hitTest([path], { x: 275, y: 226 }, env, null), { id: "p", handle: null });
+  assert.equal(hitTest([path], { x: 250, y: 210 }, env, null), null);
+  const xabcd = mk("x", "xabcd", [[10, 100], [40, 20], [70, 80], [100, 40], [130, 120]]);
+  assert.deepEqual(hitTest([xabcd], { x: 25, y: 60 }, env, null), { id: "x", handle: null });
+  const ray = mk("r", "ray", [[100, 100], [50, 100]]);
+  assert.deepEqual(hitTest([ray], { x: 20, y: 100 }, env, null), { id: "r", handle: null });
+  assert.equal(hitTest([ray], { x: 150, y: 100 }, env, null), null);
+});
+
+ok("long position: handles at entry, target, stop and width; dragging each moves only its part", () => {
+  const toPx = (a: { time: number; price: number }): Pt => ({ x: a.time, y: a.price });
+  const env = mkEnv(toPx, 400, 400);
+  const d: Drawing = { id: "L", type: "long", anchors: [{ time: 100, price: 200 }, { time: 200, price: 150 }, { time: 200, price: 230 }], style: defaultStyle("long") };
+  assert.deepEqual(handlePoints(d, env), [{ x: 100, y: 200 }, { x: 100, y: 150 }, { x: 100, y: 230 }, { x: 200, y: 200 }]);
+  assert.deepEqual(hitTest([d], { x: 150, y: 170 }, env, null), { id: "L", handle: null });
+  assert.deepEqual(hitTest([d], { x: 200, y: 201 }, env, "L"), { id: "L", handle: 3 });
+  assert.deepEqual(moveHandle(d, 1, { time: 999, price: 120 }), [d.anchors[0], { time: 200, price: 120 }, d.anchors[2]]);
+  assert.deepEqual(moveHandle(d, 3, { time: 260, price: 999 }).map((a) => a.time), [100, 260, 260]);
 });
 
 ok("measure label: preferred side, flips at the pane edge, stays inside when neither side fits, clamps horizontally", () => {

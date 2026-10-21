@@ -38,6 +38,7 @@ import TemplatesMenu from "./indicators/TemplatesMenu";
 import { DrawingController, type Bars } from "./drawings/controller";
 import { useDrawings, type DrawingsStore } from "./drawings/useDrawings";
 import Toolbar from "./drawings/Toolbar";
+import FavoritesBar from "./drawings/FavoritesBar";
 import DrawingSettings from "./drawings/DrawingSettings";
 import DrawingMenu from "./drawings/DrawingMenu";
 import type { Drawing } from "./drawings/types";
@@ -787,6 +788,23 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   }, [frame, ind.instances, ind.rev, ind.frameFor, symbol, interval, mainRev]);
 
   useEffect(() => { drawCtl.current?.refresh(); }, [draw.items, draw.selected, draw.prefs, draw.tool]);
+  useEffect(() => {
+    const lines = draw.prefs.cursor === "cross";
+    chart.current?.applyOptions({ crosshair: { vertLine: { visible: lines }, horzLine: { visible: lines } } });
+  }, [draw.prefs.cursor]);
+  const [indHidden, setIndHidden] = useState(false);
+  const shownBefore = useRef<Set<string>>(new Set());
+  const hideIndicators = useCallback((hide: boolean) => {
+    if (hide) {
+      shownBefore.current = new Set(ind.instances.filter((i) => i.visible).map((i) => i.id));
+      for (const id of shownBefore.current) ind.update(id, { visible: false });
+    } else {
+      for (const id of shownBefore.current) if (ind.instances.some((i) => i.id === id)) ind.update(id, { visible: true });
+      shownBefore.current = new Set();
+    }
+    setIndHidden(hide);
+  }, [ind]);
+  useEffect(() => { if (indHidden && ind.instances.some((i) => i.visible)) { setIndHidden(false); shownBefore.current = new Set(); } }, [ind.instances, indHidden]);
   useEffect(() => { if (draw.selected && selRef.current) select(null); }, [draw.selected, select]);
   useEffect(() => {
     const sel = selRef.current;
@@ -935,6 +953,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       </div>
       <div className="chart-body">
       <Toolbar store={draw} count={draw.items.length} onTool={() => drawCtl.current?.toolChanged()}
+               indicators={engine ? { count: ind.instances.length, hidden: indHidden, onHide: hideIndicators, onRemove: () => { ind.replaceAll([]); setIndHidden(false); } } : undefined}
                onZoomOut={() => {
                  const ts = chart.current?.timeScale(), r = ts?.getVisibleLogicalRange();
                  if (ts && r) { const mid = (r.from + r.to) / 2, half = (r.to - r.from); ts.setVisibleLogicalRange({ from: mid - half, to: mid + half }); }
@@ -942,6 +961,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       <div className="chart-main">
       <div className="chart-wrap" ref={wrap} onPointerUp={() => requestAnimationFrame(measurePanes)}>
         <div ref={el} style={{ position: "absolute", inset: 0 }} />
+        <FavoritesBar store={draw} onTool={() => drawCtl.current?.toolChanged()} />
         {(show || blank || fetching) && (
           <div className="legend-stack" style={{ top: 4 }}>
             <div className="legend">
