@@ -431,7 +431,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       items.push({ id: inst.id, visible: inst.visible && onInterval, frame: f, style: inst.style, priceFormat: priceFormatFor(cfg, prec),
                    paneFor: () => pane, scale: inst.scale, labels: inst.scaleLabels });
     }
-    if (strategy && strategy.plots.length) {
+    if (strategy && (strategy.plots.length || strategy.hlines.length)) {
       const base = next - 1;
       items.push({ id: "__strategy", visible: true, frame: strategy, style: {}, priceFormat: { type: "price", precision: sp, minMove: Math.pow(10, -sp) },
                    paneFor: (p) => (p === 0 ? 0 : base + p) });
@@ -663,6 +663,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
         axisLabels: () => priceLabels.current?.last ?? [],
         pricePrecision: () => (series.current!.options().priceFormat as { precision: number }).precision,
         colors: () => { const o = c.options(); return { grid: o.grid.vertLines.color, text: o.layout.textColor, border: o.rightPriceScale.borderColor }; },
+        overlayLines: () => renderer.current?.lineValues() ?? [],
         tintedBars: () => series.current!.data().filter((d: any) => d.color).length,
         leftScale: () => c.options().leftPriceScale.visible,
         indicatorTypes: () => c.panes().flatMap((p, pane) => p.getSeries().filter((x) => x !== series.current && x !== v).map((x) => ({ pane, type: x.seriesType() }))),

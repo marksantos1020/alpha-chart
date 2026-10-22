@@ -213,6 +213,7 @@ export class IndicatorRenderer {
         h.profiles.push({ prim, host: main });
       }
       if (h.plots.length === 0) {
+        if (main) for (const hl of f.hlines) this.addLine(h, main, hl);
         if (!f.drawings) continue;
         const pane = it.paneFor(0);
         let host = pane === 0 ? this.front() : null;
@@ -247,8 +248,7 @@ export class IndicatorRenderer {
       }
       for (const hl of f.hlines) {
         const host = hl.pane !== undefined ? hostIn(it.paneFor(hl.pane)) : hostIn(defaultPane);
-        const line = host.createPriceLine({ price: hl.value, color: hl.color ?? "#787B86", lineWidth: (hl.width ?? 1) as 1, lineStyle: LINE_STYLE[hl.style ?? "dashed"] ?? LineStyle.Dashed, axisLabelVisible: false, title: "" });
-        h.lines.push({ host, line, h: hl });
+        this.addLine(h, host, hl);
       }
     }
     this.chart.applyOptions({ leftPriceScale: { visible: items.some((it) => it.scale === "left" && it.frame?.plots.length) } });
@@ -256,6 +256,11 @@ export class IndicatorRenderer {
     panes.forEach((p, i) => p.setStretchFactor(i === 0 ? 3 : 1));
     this.bringToFront();
     this.afterBuild();
+  }
+
+  private addLine(h: ItemHandle, host: ISeriesApi<SeriesType>, hl: HLine) {
+    const line = host.createPriceLine({ price: hl.value, color: hl.color ?? "#787B86", lineWidth: (hl.width ?? 1) as 1, lineStyle: LINE_STYLE[hl.style ?? "dashed"] ?? LineStyle.Dashed, axisLabelVisible: false, title: "" });
+    h.lines.push({ host, line, h: hl });
   }
 
   private addSeries(p: PlotFrame, pane: number, priceScaleId?: string): ISeriesApi<SeriesType> {
@@ -427,6 +432,8 @@ export class IndicatorRenderer {
     }
     return out;
   }
+
+  lineValues(): number[] { return [...this.handles.values()].flatMap((h) => h.lines.map((l) => l.h.value)); }
 
   paneOf(id: string): number | null { return this.handles.get(id)?.plots[0]?.pane ?? null; }
 
