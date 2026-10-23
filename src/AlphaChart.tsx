@@ -57,6 +57,7 @@ import { localChartStorage } from "./localStorage";
 import { HlcArea } from "./hlcArea";
 import ChartTypeMenu from "./ChartTypeMenu";
 import { Chevron, IndicatorsIcon, LegendIcons, RedoIcon, UndoIcon } from "./icons";
+import { ADD_SIZE, AddButton } from "./addButton";
 import { canvasColors, useDocumentTheme, useResolvedTheme, type CanvasColors, type ThemeMode } from "./theme";
 
 export interface AlphaChartProps {
@@ -546,7 +547,9 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
     renderer.current.setAfterBuild(applyMarks);
     renderer.current.setSelected(selRef.current);
     renderer.current.bringToFront();
+    const addButton = new AddButton(() => colorsRef.current);
     bindMain.current = (main: ISeriesApi<SeriesType>) => {
+      main.attachPrimitive(addButton);
       drawCtl.current?.destroy();
       if (priceLabels.current) { try { series.current?.detachPrimitive(priceLabels.current); } catch {} }
       drawCtl.current = makeController(c, main);
@@ -627,19 +630,60 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       else if (id && id !== "__volume") setEditing(id);
     };
     const host = el.current;
-    const pointAt = (e: MouseEvent): ChartPoint | null => {
-      const main = series.current, pane = c.panes()[0], row = pane?.getHTMLElement(), times = barsRef.current.times;
-      if (!main || !row || !times.length) return null;
+    const plotPoint = (e: MouseEvent) => {
+      const pane = c.panes()[0], row = pane?.getHTMLElement();
+      if (!row) return null;
       const r = row.getBoundingClientRect(), ts = c.timeScale();
       let left = 0;
       try { left = c.priceScale("left").width(); } catch {}
       const x = e.clientX - r.left - left, y = e.clientY - r.top;
       if (x < 0 || x > ts.width() || y < 0 || y > pane.getHeight()) return null;
+      return { x, y, top: r.top, left: r.left + left, width: ts.width() };
+    };
+    const pointFor = (x: number, y: number): ChartPoint | null => {
+      const main = series.current, times = barsRef.current.times, ts = c.timeScale();
+      if (!main || !times.length) return null;
       const price = main.coordinateToPrice(y), at = ts.coordinateToTime(x);
       if (price === null) return null;
       const nearest = times[Math.max(0, Math.min(times.length - 1, Math.round(ts.coordinateToLogical(x) ?? 0)))];
       return { price, time: at === null ? nearest : (at as number) * 1000 };
     };
+    const pointAt = (e: MouseEvent) => {
+      const p = plotPoint(e);
+      return p && pointFor(p.x, p.y);
+    };
+    const area = wrap.current!;
+    let addSpot: { x: number; y: number; hot: boolean } | null = null;
+    const showAdd = (spot: { x: number; y: number; hot: boolean } | null, y = 0) => {
+      addSpot = spot;
+      addButton.set(spot && { y, hot: spot.hot });
+      area.classList.toggle("add-hot", !!spot?.hot);
+    };
+    const addReady = (e: MouseEvent) => !!contextMenuRef.current && cursorTool() && barsRef.current.times.length > 0 && e.target instanceof Node && host.contains(e.target);
+    const onHover = (e: MouseEvent) => {
+      const p = addReady(e) && !e.buttons ? plotPoint(e) : null;
+      showAdd(p && { x: p.left + p.width - ADD_SIZE, y: p.top + p.y - ADD_SIZE / 2, hot: p.x >= p.width - ADD_SIZE - 4 }, p?.y);
+    };
+    const onLeave = () => showAdd(null);
+    const inAddStrip = (e: MouseEvent) => {
+      const p = addReady(e) ? plotPoint(e) : null;
+      return p && p.x >= p.width - ADD_SIZE - 4 ? p : null;
+    };
+    const onAddDown = (e: MouseEvent) => {
+      if (e.button !== 0 || !inAddStrip(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const onAddClick = (e: MouseEvent) => {
+      const p = inAddStrip(e), point = p && pointFor(p.x, p.y), items = point ? contextMenuRef.current!(point) : [];
+      if (!items.length) return;
+      e.stopPropagation();
+      setPointMenu({ x: e.clientX, y: e.clientY, items });
+    };
+    area.addEventListener("mousemove", onHover);
+    area.addEventListener("mouseleave", onLeave);
+    area.addEventListener("mousedown", onAddDown, true);
+    area.addEventListener("click", onAddClick, true);
     const onContext = (e: MouseEvent) => {
       if (!cursorTool() || e.defaultPrevented) return;
       const id = hoverSel.current;
@@ -688,6 +732,7 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
         pricePrecision: () => (series.current!.options().priceFormat as { precision: number }).precision,
         colors: () => { const o = c.options(); return { grid: o.grid.vertLines.color, text: o.layout.textColor, border: o.rightPriceScale.borderColor }; },
         overlayLines: () => renderer.current?.lineValues() ?? [],
+        addButton: () => (addSpot ? { ...addSpot, size: ADD_SIZE } : null),
         tintedBars: () => series.current!.data().filter((d: any) => d.color).length,
         leftScale: () => c.options().leftPriceScale.visible,
         indicatorTypes: () => c.panes().flatMap((p, pane) => p.getSeries().filter((x) => x !== series.current && x !== v).map((x) => ({ pane, type: x.seriesType() }))),
@@ -702,6 +747,12 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       c.unsubscribeClick(onClick);
       c.unsubscribeDblClick(onDbl);
       host.removeEventListener("contextmenu", onContext);
+      area.removeEventListener("mousemove", onHover);
+      area.removeEventListener("mouseleave", onLeave);
+      area.removeEventListener("mousedown", onAddDown, true);
+      area.removeEventListener("click", onAddClick, true);
+      area.classList.remove("add-hot");
+      try { series.current?.detachPrimitive(addButton); } catch {}
       marks.current = [];
       renderer.current?.destroy();
       drawCtl.current?.destroy(); drawCtl.current = null; priceLabels.current = null;
@@ -1170,7 +1221,11 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       })()}
       {pointMenu && (
         <ContextMenu x={pointMenu.x} y={pointMenu.y} onClose={() => setPointMenu(null)}>
-          {(act) => pointMenu.items.map((item, i) => <button key={i} className={item.danger ? "danger" : undefined} onClick={act(item.onSelect)}>{item.label}</button>)}
+          {(act) => pointMenu.items.map((item, i) => (
+            <button key={i} className={item.danger ? "danger" : undefined} onClick={act(item.onSelect)}>
+              {item.label}{item.hint && <span className="menu-hint">{item.hint}</span>}
+            </button>
+          ))}
         </ContextMenu>
       )}
       {drawMenu && (() => {

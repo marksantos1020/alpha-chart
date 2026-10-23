@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { LegendIcons } from "../icons";
 
 export interface RowValue { text: string; color: string }
@@ -87,8 +87,13 @@ export function ContextMenu({ x, y, onClose, children }: { x: number; y: number;
     return () => { window.removeEventListener("mousedown", down); window.removeEventListener("keydown", esc); };
   }, []);
   const act = (fn: () => void) => () => { onClose(); fn(); };
+  const [at, setAt] = useState({ left: x, top: y });
+  useLayoutEffect(() => {
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setAt({ left: Math.max(8, Math.min(x, window.innerWidth - r.width - 8)), top: Math.max(8, Math.min(y, window.innerHeight - r.height - 8)) });
+  }, [x, y]);
   return (
-    <div ref={ref} className="ind-menu draw-menu" style={{ position: "fixed", left: Math.min(x, window.innerWidth - 220), top: Math.min(y, window.innerHeight - 340) }} role="menu">
+    <div ref={ref} className="ind-menu draw-menu" style={{ position: "fixed", ...at }} role="menu">
       {children(act)}
     </div>
   );

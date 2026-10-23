@@ -68,6 +68,9 @@ export interface CanvasColors {
   separatorHover: string;
   crosshair: string;
   crosshairLabel: string;
+  add: string;
+  addHover: string;
+  addText: string;
   bg: string;
 }
 
@@ -81,6 +84,9 @@ export function canvasColors(el: Element): CanvasColors {
     separatorHover: v("--chart-separator-hover", "rgba(242,181,68,0.25)"),
     crosshair: v("--chart-crosshair", "#9598a1"),
     crosshairLabel: v("--chart-crosshair-label", "#131722"),
+    add: v("--chart-add", "#131722"),
+    addHover: v("--chart-add-hover", "#4a505a"),
+    addText: v("--chart-add-text", "#ffffff"),
     bg: v("--bg", "#151b23"),
   };
 }

@@ -21,7 +21,7 @@ export interface Datafeed {
 
 export interface ChartPoint { price: number; time: number }
 
-export interface ChartMenuItem { label: string; onSelect: () => void; danger?: boolean }
+export interface ChartMenuItem { label: string; onSelect: () => void; hint?: string; danger?: boolean }
 
 export type SaveResult<T> = { ok: true } | { ok: false; conflict: { doc: T; updated: number } };
 export interface StoredDoc<T> { doc: T | null; updated: number }

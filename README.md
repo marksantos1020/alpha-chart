@@ -146,14 +146,14 @@ input the user pointed at another indicator. `src/basic/engine.ts` is a complete
 | `onInterval`, `intervals` | interval changes the chart asks for (typed interval, range buttons, layout), and the allowed ones |
 | `engine`, `storage` | see above; without an engine the Indicators button is hidden |
 | `overlay` | host output drawn over the chart, e.g. a strategy's plots and trade markers; a level (`hlines`) with `label: true` shows its `title` and its price on the axis |
-| `contextMenu` | items for the menu of a right click in the main pane (see below) |
+| `contextMenu` | items for the right-click menu of the main pane and for the **+** button that follows the pointer along the price axis (see below) |
 | `legendRows`, `toolbar`, `actions` | your own content in the legend and the toolbar |
 | `onAddStrategy`, `pickerRequest` | picker entries of kind `"strategy"`; open the picker from outside |
 | `volumeUnit`, `barInfo`, `barInfoLabel`, `block` | volume unit, extra bar details in the status line, countdown in blocks (chains) |
 | `theme`, `onThemeChange` | `"dark"`, `"light"` or `"system"`; with `onThemeChange` Chart settings › Canvas offers the choice |
 | `ref` | `goTo(ms)`, `showRange("1M")` |
 
-### Right-click menu
+### Menu at a price
 
 ```tsx
 <AlphaChart
@@ -163,9 +163,15 @@ input the user pointed at another indicator. `src/basic/engine.ts` is a complete
 />
 ```
 
-A right click on an empty part of the main pane calls `contextMenu` with the `price` under the pointer and the
-`time` (epoch ms) of the nearest bar. The items it returns (`{ label, onSelect, danger? }`) open as a menu at the pointer.
-Return an empty array, or leave the prop out, and the browser's own menu stays. Drawings and indicator lines keep their menus.
+`contextMenu` is called with the `price` under the pointer and the `time` (epoch ms) of the nearest bar, and returns the
+items of a menu (`{ label, onSelect, hint?, danger? }`; `hint` is a shortcut shown on the right). It is used twice:
+
+- a right click on an empty part of the main pane opens the menu at the pointer; return an empty array, or leave the prop
+  out, and the browser's own menu stays. Drawings and indicator lines keep their menus.
+- while the pointer is over the main pane a **+** button follows it along the right edge of the plot, as on TradingView's
+  price axis; clicking it opens the same menu for the price at the button. It is drawn on the chart canvas, level with the
+  crosshair label and above the crosshair lines, so it is not part of the page's markup. It is hidden while a drawing
+  tool is active or the chart is being dragged.
 
 ### Themes
 
@@ -201,6 +207,7 @@ stylesheet restyles the whole chart:
 | `--text`, `--muted`, `--dim` | text levels |
 | `--buy`, `--sell`, `--accent`, `--blue`, `--link` | up/down values, focus and highlights, active tools, links |
 | `--chart-text`, `--chart-grid`, `--chart-crosshair`, `--chart-crosshair-label` | axis labels, grid, crosshair |
+| `--chart-add`, `--chart-add-hover`, `--chart-add-text` | the **+** button beside the price label: its fill, its fill under the pointer, its icon (see Menu at a price) |
 | `--hover`, `--veil`, `--backdrop`, `--shadow` | legend hover, loading veil, dialog backdrop, shadows |
 | `--gap` | the space between panels |
 
