@@ -45,7 +45,7 @@ export interface ProfileSpec {
   upColor: string; downColor: string; vaUpColor: string; vaDownColor: string; pocColor: string; showPoc: boolean;
 }
 export interface BandFrame { title: string; color: string; times: Float64Array; upper: Float64Array; lower: Float64Array; offset?: number; colorDown?: string }
-export interface HLine { value: number; title?: string; color?: string; style?: string; width?: number; pane?: number }
+export interface HLine { value: number; title?: string; color?: string; style?: string; width?: number; pane?: number; label?: boolean }
 
 export interface IndicatorFrame {
   plots: PlotFrame[];

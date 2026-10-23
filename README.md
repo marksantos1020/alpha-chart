@@ -145,12 +145,27 @@ input the user pointed at another indicator. `src/basic/engine.ts` is a complete
 | `datafeed`, `symbol`, `interval` | required |
 | `onInterval`, `intervals` | interval changes the chart asks for (typed interval, range buttons, layout), and the allowed ones |
 | `engine`, `storage` | see above; without an engine the Indicators button is hidden |
-| `overlay` | host output drawn over the chart, e.g. a strategy's plots and trade markers |
+| `overlay` | host output drawn over the chart, e.g. a strategy's plots and trade markers; a level (`hlines`) with `label: true` shows its `title` and its price on the axis |
+| `contextMenu` | items for the menu of a right click in the main pane (see below) |
 | `legendRows`, `toolbar`, `actions` | your own content in the legend and the toolbar |
 | `onAddStrategy`, `pickerRequest` | picker entries of kind `"strategy"`; open the picker from outside |
 | `volumeUnit`, `barInfo`, `barInfoLabel`, `block` | volume unit, extra bar details in the status line, countdown in blocks (chains) |
 | `theme`, `onThemeChange` | `"dark"`, `"light"` or `"system"`; with `onThemeChange` Chart settings › Canvas offers the choice |
 | `ref` | `goTo(ms)`, `showRange("1M")` |
+
+### Right-click menu
+
+```tsx
+<AlphaChart
+  contextMenu={({ price }) => [{ label: `Mark ${price.toFixed(2)}`, onSelect: () => addMark(price) }]}
+  overlay={{ plots: [], bands: [], shapes: [], bgcolors: [], hlines: marks.map((value) => ({ value, title: "Mark", label: true })) }}
+  {...rest}
+/>
+```
+
+A right click on an empty part of the main pane calls `contextMenu` with the `price` under the pointer and the
+`time` (epoch ms) of the nearest bar. The items it returns (`{ label, onSelect, danger? }`) open as a menu at the pointer.
+Return an empty array, or leave the prop out, and the browser's own menu stays. Drawings and indicator lines keep their menus.
 
 ### Themes
 

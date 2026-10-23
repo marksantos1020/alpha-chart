@@ -1,7 +1,7 @@
 export { default as AlphaChart, INITIAL_BARS, parseInterval } from "./AlphaChart";
 export type { AlphaChartProps, AlphaChartHandle } from "./AlphaChart";
 export type {
-  Bar, Datafeed, ChartStorage, TemplateStore, TemplateInfo, TemplateIndicators, SaveResult, StoredDoc,
+  Bar, ChartMenuItem, ChartPoint, Datafeed, ChartStorage, TemplateStore, TemplateInfo, TemplateIndicators, SaveResult, StoredDoc,
   IndicatorEngine, EngineConnection, EngineIn, EngineOut, StudyEntry, OverlayFrame,
 } from "./types";
 export type {

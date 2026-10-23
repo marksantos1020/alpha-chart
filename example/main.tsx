@@ -1,6 +1,6 @@
-import { StrictMode, useState } from "react";
+import { StrictMode, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { AlphaChart, ThemeToggle, basicEngine, useThemeMode, type Datafeed } from "../src";
+import { AlphaChart, ThemeToggle, basicEngine, fmtPrice, useThemeMode, type Datafeed, type OverlayFrame } from "../src";
 import { binanceDatafeed } from "./binance";
 import { demoDatafeed } from "./demo";
 import "../src/styles.css";
@@ -17,8 +17,12 @@ function App() {
   const [source, setSource] = useState("binance");
   const [symbol, setSymbol] = useState(SYMBOLS[0]);
   const [interval, setInterval] = useState("60");
+  const [marks, setMarks] = useState<number[]>([]);
   const { mode, theme, setMode } = useThemeMode();
   const src = SOURCES[source];
+  const overlay = useMemo<OverlayFrame | null>(() => marks.length
+    ? { plots: [], bands: [], shapes: [], bgcolors: [], hlines: marks.map((value) => ({ value, title: "Mark", color: "#f2b544", style: "dotted", label: true })) }
+    : null, [marks]);
   return (
     <main className="example">
       <AlphaChart
@@ -31,9 +35,14 @@ function App() {
         name={src.label}
         theme={mode}
         onThemeChange={setMode}
+        overlay={overlay}
+        contextMenu={({ price }) => [
+          { label: `Mark ${fmtPrice(price)}`, onSelect: () => setMarks((m) => [...m, price]) },
+          ...(marks.length ? [{ label: "Clear marks", danger: true, onSelect: () => setMarks([]) }] : []),
+        ]}
         toolbar={
           <>
-            <select className="bar-style" value={symbol} onChange={(e) => setSymbol(e.target.value)} aria-label="Symbol">
+            <select className="bar-style" value={symbol} onChange={(e) => { setSymbol(e.target.value); setMarks([]); }} aria-label="Symbol">
               {SYMBOLS.map((s) => <option key={s}>{s}</option>)}
             </select>
             <div className="tabs">
@@ -44,7 +53,7 @@ function App() {
         actions={
           <>
             {src.credit && <a className="credit" href={src.credit.href} target="_blank" rel="noreferrer">{src.credit.text}</a>}
-            <select className="bar-style" value={source} onChange={(e) => setSource(e.target.value)} aria-label="Data source">
+            <select className="bar-style" value={source} onChange={(e) => { setSource(e.target.value); setMarks([]); }} aria-label="Data source">
               {Object.entries(SOURCES).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}
             </select>
             <ThemeToggle theme={theme} onChange={setMode} />

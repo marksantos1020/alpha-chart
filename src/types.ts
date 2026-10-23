@@ -19,6 +19,10 @@ export interface Datafeed {
   pricePrecision?(symbol: string): number | undefined | Promise<number | undefined>;
 }
 
+export interface ChartPoint { price: number; time: number }
+
+export interface ChartMenuItem { label: string; onSelect: () => void; danger?: boolean }
+
 export type SaveResult<T> = { ok: true } | { ok: false; conflict: { doc: T; updated: number } };
 export interface StoredDoc<T> { doc: T | null; updated: number }
 

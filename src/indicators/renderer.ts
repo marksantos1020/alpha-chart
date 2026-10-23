@@ -156,7 +156,7 @@ export class IndicatorRenderer {
       if (!f) return `${it.id}:-`;
       const plots = f.plots.map((p) => `${p.title}|${p.style}|${p.display}|${it.paneFor(p.pane)}`).join(",");
       const bands = f.bands.map((b) => b.title).join(",") + `|bg${f.bgcolors.length}`;
-      const lines = f.hlines.map((h) => `${h.value}|${it.paneFor(h.pane ?? (f.plots[0]?.pane ?? 0))}`).join(",");
+      const lines = f.hlines.map((h) => `${h.value}|${it.paneFor(h.pane ?? (f.plots[0]?.pane ?? 0))}${h.label ? `|${h.title ?? ""}` : ""}`).join(",");
       return `${it.id}:[${plots}][${bands}][${lines}]${f.drawings ? "d" : ""}${f.profiles?.length ? `p${f.profiles.length}` : ""}${it.scale ?? ""}`;
     }).join(";");
   }
@@ -259,7 +259,7 @@ export class IndicatorRenderer {
   }
 
   private addLine(h: ItemHandle, host: ISeriesApi<SeriesType>, hl: HLine) {
-    const line = host.createPriceLine({ price: hl.value, color: hl.color ?? "#787B86", lineWidth: (hl.width ?? 1) as 1, lineStyle: LINE_STYLE[hl.style ?? "dashed"] ?? LineStyle.Dashed, axisLabelVisible: false, title: "" });
+    const line = host.createPriceLine({ price: hl.value, color: hl.color ?? "#787B86", lineWidth: (hl.width ?? 1) as 1, lineStyle: LINE_STYLE[hl.style ?? "dashed"] ?? LineStyle.Dashed, axisLabelVisible: !!hl.label, title: hl.label ? hl.title ?? "" : "" });
     h.lines.push({ host, line, h: hl });
   }
 

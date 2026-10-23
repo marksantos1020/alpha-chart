@@ -23,7 +23,7 @@ import {
   type Time,
   type UTCTimestamp,
 } from "lightweight-charts";
-import type { Bar, ChartStorage, Datafeed, IndicatorEngine, OverlayFrame, StudyEntry } from "./types";
+import type { Bar, ChartMenuItem, ChartPoint, ChartStorage, Datafeed, IndicatorEngine, OverlayFrame, StudyEntry } from "./types";
 import { fmtPrice, fmtNum, priceDecimals } from "./format";
 import { uid } from "./uid";
 import { IndicatorRenderer, type RenderItem } from "./indicators/renderer";
@@ -70,6 +70,7 @@ export interface AlphaChartProps {
   storage?: ChartStorage;
   overlay?: OverlayFrame | null;
   legendRows?: ReactNode;
+  contextMenu?: (at: ChartPoint) => ChartMenuItem[];
   onAddStrategy?: (entry: StudyEntry) => void;
   pickerRequest?: { seq: number; category?: string } | null;
   toolbar?: ReactNode;
@@ -216,7 +217,7 @@ function overlayFrame(f: OverlayFrame | null | undefined): OverlayFrame | null {
 }
 
 const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaChart(
-  { datafeed, symbol, interval, onInterval, intervals, name, engine, storage = DEFAULT_STORAGE, overlay, legendRows, onAddStrategy, pickerRequest,
+  { datafeed, symbol, interval, onInterval, intervals, name, engine, storage = DEFAULT_STORAGE, overlay, legendRows, contextMenu, onAddStrategy, pickerRequest,
     toolbar, actions, volumeUnit, barInfo, barInfoLabel, block, theme, onThemeChange, onIndicatorSource, debug }, ref) {
   const resolvedTheme = useResolvedTheme(theme);
   const documentTheme = useDocumentTheme();
@@ -283,10 +284,12 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
   const [selected, setSelectedState] = useState<string | null>(null);
   const selRef = useRef<string | null>(null);
   const [seriesMenu, setSeriesMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [pointMenu, setPointMenu] = useState<{ x: number; y: number; items: ChartMenuItem[] } | null>(null);
+  const contextMenuRef = useRef(contextMenu); contextMenuRef.current = contextMenu;
   const marks = useRef<{ prim: SelectionMarks; host: ISeriesApi<SeriesType> }[]>([]);
   const hoverSel = useRef<string | null>(null);
   const menuOpen = useRef(false);
-  menuOpen.current = !!seriesMenu || !!drawMenu;
+  menuOpen.current = !!seriesMenu || !!drawMenu || !!pointMenu;
   const barsRef = useRef<Bars>({ times: [], open: [], high: [], low: [], close: [], volume: [] });
   const barsFor = useRef<Bar[] | null>(null);
   if (barsFor.current !== candles) {
@@ -624,12 +627,33 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
       else if (id && id !== "__volume") setEditing(id);
     };
     const host = el.current;
+    const pointAt = (e: MouseEvent): ChartPoint | null => {
+      const main = series.current, pane = c.panes()[0], row = pane?.getHTMLElement(), times = barsRef.current.times;
+      if (!main || !row || !times.length) return null;
+      const r = row.getBoundingClientRect(), ts = c.timeScale();
+      let left = 0;
+      try { left = c.priceScale("left").width(); } catch {}
+      const x = e.clientX - r.left - left, y = e.clientY - r.top;
+      if (x < 0 || x > ts.width() || y < 0 || y > pane.getHeight()) return null;
+      const price = main.coordinateToPrice(y), at = ts.coordinateToTime(x);
+      if (price === null) return null;
+      const nearest = times[Math.max(0, Math.min(times.length - 1, Math.round(ts.coordinateToLogical(x) ?? 0)))];
+      return { price, time: at === null ? nearest : (at as number) * 1000 };
+    };
     const onContext = (e: MouseEvent) => {
+      if (!cursorTool() || e.defaultPrevented) return;
       const id = hoverSel.current;
-      if (!id || id === "__main" || !cursorTool()) return;
+      if (id && id !== "__main") {
+        e.preventDefault();
+        selectRef.current(id);
+        setSeriesMenu({ id, x: e.clientX, y: e.clientY });
+        return;
+      }
+      const build = contextMenuRef.current, at = build ? pointAt(e) : null;
+      const items = build && at ? build(at) : [];
+      if (!items.length) return;
       e.preventDefault();
-      selectRef.current(id);
-      setSeriesMenu({ id, x: e.clientX, y: e.clientY });
+      setPointMenu({ x: e.clientX, y: e.clientY, items });
     };
     c.subscribeClick(onClick);
     c.subscribeDblClick(onDbl);
@@ -1144,6 +1168,11 @@ const AlphaChart = forwardRef<AlphaChartHandle, AlphaChartProps>(function AlphaC
         if (!r) return null;
         return <ContextMenu x={seriesMenu.x} y={seriesMenu.y} onClose={close}>{(act) => <IndicatorMenuItems p={rowProps(r)} act={act} />}</ContextMenu>;
       })()}
+      {pointMenu && (
+        <ContextMenu x={pointMenu.x} y={pointMenu.y} onClose={() => setPointMenu(null)}>
+          {(act) => pointMenu.items.map((item, i) => <button key={i} className={item.danger ? "danger" : undefined} onClick={act(item.onSelect)}>{item.label}</button>)}
+        </ContextMenu>
+      )}
       {drawMenu && (() => {
         const d = draw.items.find((x) => x.id === drawMenu.id);
         if (!d) return null;
